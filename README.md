@@ -1,8 +1,12 @@
-# .skel
+# Baycat
 
-This is a skeleton project.  It needs better documentation.
+Baycat is an efficiency-oriented S3 backup tool
 
-Contents:
+License: AGPL v3 <br/>
+Author: Josh Myer <josh@joshisanerd.com> <br/>
+Status: pre-alpha
 
-web/ -- An empty website for this thing
-code/ -- An empty directory for code for this thing
+README contents to follow.
+
+Copyright (c) 2022 Josh Myer <josh@joshisanerd.com>
+
