@@ -48,6 +48,7 @@ def baycat_json_decoder(obj):
             DECODERS[cls.JSON_CLASSNAME] = cls.from_json_obj
 
     if clsname not in DECODERS:
+        # XXX TODO Add test coverage for this branch
         logging.error(f'Got unknown JSON classname: {clsname}')
         logging.debug(f'Known JSON decoders: {DECODERS}')
         raise ValueError(f'Got unknown JSON classname: {clsname}')

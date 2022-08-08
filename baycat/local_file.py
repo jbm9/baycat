@@ -1,8 +1,11 @@
 from collections import namedtuple
 
 import logging
+import math
 import os
 import time
+
+from hashlib import md5
 
 from .json_serdes import JSONSerDes
 
@@ -15,14 +18,18 @@ class ChecksumMissingException(ValueError): pass
 class ChecksumKindException(ValueError): pass
 class PathMismatchException(ValueError): pass
 
+
 class LocalFile(JSONSerDes):
     JSON_CLASSNAME = "LocalFile"
 
-    def __init__(self, path, statinfo, cksum=None, cksum_type="MD5"):
+    def __init__(self, root_path, rel_path, statinfo, cksum=None, cksum_type="MD5", is_dir=False):
         self._json_classname = self.JSON_CLASSNAME
-        self.path = path
+        self.root_path = root_path
+        self.rel_path = rel_path
+        self.path = os.path.abspath(os.path.join(self.root_path, self.rel_path))
         self.cksum = cksum
         self.cksum_type = cksum_type
+        self.is_dir = is_dir
 
         self.collected = time.time()
 
@@ -31,7 +38,7 @@ class LocalFile(JSONSerDes):
 
         # Diffable fields
         self.size = statinfo.st_size
-        self.mtime = statinfo.st_mtime
+        self.mtime_ns = statinfo.st_mtime_ns
         # self.cksum is also usable for this
 
         # Metadata we keep track of for restore
@@ -39,9 +46,12 @@ class LocalFile(JSONSerDes):
             "uid": statinfo.st_uid,
             "gid": statinfo.st_gid,
             "mode": statinfo.st_mode,
-            "atime": statinfo.st_atime,
-            "ctime": statinfo.st_ctime,
+            "atime_ns": statinfo.st_atime_ns,
         }
+
+    def get_utime(self):
+        '''Get the tuple used for os.utime()'''
+        return (self.metadata["atime_ns"], self.mtime_ns)
 
     def delta(self, old_state, compare_checksums=False, force_checksum=False):
         '''This computes which fields are dirty, running checksums if needed
@@ -50,7 +60,7 @@ class LocalFile(JSONSerDes):
         * compare_checksums: set to True to skip checksum tests on mtime changes
         * force_checksum: force recompute of checksum even if we don't think it's needed (TODO)
         '''
-        if self.path != old_state.path:
+        if self.rel_path != old_state.rel_path:
             raise PathMismatchException(f"LocalFile delta paths don't match!")
 
         if self.cksum_type != old_state.cksum_type:
@@ -65,19 +75,22 @@ class LocalFile(JSONSerDes):
         result["_recomputed_cksum"] = False
 
         result["size"] = self.size != old_state.size
-        result["mtime"] = self.mtime != old_state.mtime
+        result["mtime_ns"] = self.mtime_ns != old_state.mtime_ns
 
         if not compare_checksums:
             result["cksum"] = None
         else:
             if force_checksum or self.cksum is None:
+                self.recompute_checksum()
                 result["_recomputed_cksum"] = True
-                raise TODOException("Implement checksums")
 
             result["cksum"] = self.cksum != old_state.cksum
 
         for f in self.metadata:
-            result[f] = self.metadata[f] != old_state.metadata[f]
+            if f == "atime_ns":
+                result[f] = False
+            else:
+                result[f] = self.metadata[f] != old_state.metadata[f]
 
         # Add a flag to let us quickly check if anything has changed
         any_dirty = any(result.values())
@@ -86,20 +99,47 @@ class LocalFile(JSONSerDes):
         return result
 
     @classmethod
-    def for_path(cls, path, is_dir=False):
+    def _md5(cls, path, chunksize=32*1024):
+        hash = md5()
+        with open(path, "rb") as f:
+            while True:
+                buf = f.read(chunksize)
+                if not buf:
+                    break
+                hash.update(buf)
+        return hash.hexdigest()
+
+    def recompute_checksum(self):
+        self.cksum = self._md5(self.path)
+
+    @classmethod
+    def for_path(cls, root_path, rel_path, is_dir=False, do_checksum=False):
+        path = os.path.join(root_path, rel_path)
         sr = os.stat(path, follow_symlinks=False)
 
         if is_dir:
-            path_out = os.path.join(path, PATH_DUMMY_FILENAME)
+            rel_path_out = rel_path
+            while rel_path_out.endswith("/"):
+                rel_path_out = rel_path_out[:-1]
         else:
             if path.endswith("/" + PATH_DUMMY_FILENAME):
                 raise ReservedNameException(f"You have a file named {PATH_DUMMY_FILENAME}, which will not be synced")
-            path_out = path
+            rel_path_out = rel_path
 
-        return LocalFile(path_out, sr, cksum=None)
+        cksum = None
+        if do_checksum and not is_dir:
+            cksum = cls._md5(path)
+
+        result = LocalFile(root_path, rel_path_out, sr, cksum=cksum, is_dir=is_dir)
+        return result
+
+    @classmethod
+    def for_abspath(cls, root_path, abs_path, **kwargs):
+        n = len(root_path) + 1
+        return cls.for_path(root_path, abs_path[n:], **kwargs)
 
     def __str__(self):
-        return f'{self.path}@{self.mtime}/{self.size}'
+        return f'{self.path}@{self.mtime_ns}/{self.size}'
 
     # No custom to_json_obj needed
 
@@ -115,8 +155,8 @@ class LocalFile(JSONSerDes):
 
         sr_d = dict()
 
-        top_level = ["size", "mtime"]
-        md_level = ["uid", "gid", "mode", "atime", "ctime"]
+        top_level = ["size", "mtime_ns"]
+        md_level = ["uid", "gid", "mode", "atime_ns"]
 
         for f in top_level:
             sr_d[f'st_{f}'] = obj[f]
@@ -128,7 +168,8 @@ class LocalFile(JSONSerDes):
 
         sr_dummy = SRDummy(**sr_d)
 
-        result = LocalFile(obj["path"], sr_dummy, obj["cksum"], obj["cksum_type"])
+        result = LocalFile(obj["root_path"], obj["rel_path"], sr_dummy,
+                           obj["cksum"], obj["cksum_type"], is_dir=obj["is_dir"])
         result.collected = obj["collected"]
 
         return result
@@ -144,7 +185,7 @@ class LocalFile(JSONSerDes):
             allkeys = set(a.keys()) | set(b.keys())
 
             for k in allkeys:
-                if k == "metadata":
+                if k in ["metadata", "atime_ns", "collected"]:
                     continue
                 if a.get(k, None) != b.get(k, None):
                     return False

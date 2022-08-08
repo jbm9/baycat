@@ -3,8 +3,14 @@ import json
 import os
 
 from .json_serdes import JSONSerDes, BaycatJSONEncoder, baycat_json_decoder
+from .file_selectors import PathSelector
 
 MANIFEST_FILENAME = ".baycat_manifest"
+
+
+class DifferentRootPathException(ValueError):
+    '''Raised when an add_selection() can't be added to existing entries'''
+    pass
 
 
 class Manifest(JSONSerDes):
@@ -12,13 +18,31 @@ class Manifest(JSONSerDes):
 
     def __init__(self, path=MANIFEST_FILENAME):
         self.path = path
+        self.root = None
         self.entries = {}  # path => LocalFile
 
     def add_selector(self, sel):
         '''Add from the file_selector interface selector given'''
 
+        if self.root is None:
+            self.root = sel.rootpath
+        else:
+            if self.root != sel.rootpath:
+                errstr = f"Manifest at {self.root}, path selector at {sel.rootpath}"
+                raise DifferentRootPathException(errstr)
+
         for lf in sel.walk():
-            self.entries[lf.path] = lf
+            self.entries[lf.rel_path] = lf
+
+    @classmethod
+    def for_path(cls, rootpath, path=MANIFEST_FILENAME):
+        ps = PathSelector(rootpath)
+        result = Manifest(path=path)
+        result.add_selector(ps)
+        return result
+
+    def _expand_path(self, rel_path):
+        return os.path.join(self.root, rel_path)
 
     def save(self, path=None, overwrite=False):
         if path is None:
@@ -87,5 +111,78 @@ class Manifest(JSONSerDes):
         result.entries = obj["entries"]
         return result
 
-    def diffs(self, old_manifest):
-        '''Collects a set of file diffs between the two manifests.'''
+    def diff_from(self, old_manifest):
+        '''Collects a set of file diffs from the given manifest to this one.
+
+        This treats the current manifest as the goal state, with
+        old_manifest as the state on-disk.
+
+        Note that this doesn't do any actual work, it just finds what
+        work needs to be done at this particular point in time.
+
+        '''
+
+        files_added = []    # Files present now, but missing then
+        files_deleted = []  # Files present in the other manifest, but not here
+
+        files_content_changed = []  # Files with content changes
+        files_metadata_changed = []  # Files with metadata changes
+
+        files_unchanged = []  # Files that have no changes
+
+        # NB: we're going to use *relative* paths in this codepath,
+        # not the absolute paths we use everywhere else.
+        paths_self = set(self.entries.keys())
+        paths_old = set(old_manifest.entries.keys())
+
+        files_added = list(paths_self - paths_old)
+        files_deleted = list(paths_old - paths_self)
+
+        files_common = paths_self & paths_old
+
+        for p in files_common:
+            lf_new = self.entries[p]
+            lf_old = old_manifest.entries[p]
+
+            file_delta = lf_new.delta(lf_old)
+
+            if not file_delta["_dirty"]:
+                files_unchanged.append(p)
+                continue
+
+            contents_modified = False
+            metadata_modified = False
+
+            for k in ["size", "mtime_ns", "cksum"]:
+                if file_delta[k]:
+                    if lf_new.is_dir:
+                        metadata_modified = True
+                    else:
+                        contents_modified = True
+
+            for k in lf_new.metadata:
+                if k == "atime_ns":
+                    continue
+                if file_delta[k]:
+                    metadata_modified = True
+
+            if contents_modified:
+                files_content_changed.append(p)
+
+            if metadata_modified:
+                files_metadata_changed.append(p)
+
+        #####################
+        # We now have enough information to plan a sync.
+
+        result = {
+            "added": files_added,
+            "deleted": files_deleted,
+            "contents": files_content_changed,
+            "metadata": files_metadata_changed,
+            "unchanged": files_unchanged,
+            "new_manifest": self,
+            "old_manifest": old_manifest,
+        }
+
+        return result

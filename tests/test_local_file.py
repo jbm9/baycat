@@ -4,31 +4,43 @@ import shutil
 import tempfile
 import unittest
 
-from context import baycat
+from context import baycat, BaycatTestCase
 
 from baycat.local_file import LocalFile, ChecksumMissingException, \
     ChecksumKindException, PathMismatchException, ReservedNameException
 from baycat.json_serdes import BaycatJSONEncoder, baycat_json_decoder
 
 
-class TestLocalFile(unittest.TestCase):
-    def setUp(self):
-        self.test_dir = tempfile.mkdtemp()
-
-    def tearDown(self):
-        shutil.rmtree(self.test_dir)
-
-    def _get_lf(self, path="/etc/passwd"):
-        return LocalFile.for_path(path)
-
+class TestLocalFile(BaycatTestCase):
     def test__reservednameexception(self):
-        path = os.path.join(self.test_dir, ".baycat_dir_metadata")
+        rel_path = ".baycat_dir_metadata"
+        path = os.path.join(self.test_dir, rel_path)
         f = open(path, "w+")
         f.write("hi moM")
         f.close()
 
         self.assertRaises(ReservedNameException,
-                          lambda: LocalFile.for_path(path))
+                          lambda: LocalFile.for_path(self.test_dir, rel_path))
+
+    def test__for_path(self):
+        # NB: this does double-duty: it tests for_path very gently,
+        # but it also lets us smoke test the filesystem population
+        # helpers in BaycatTestCase.
+
+        for subpath, contents, exp_hash in BaycatTestCase.FILECONTENTS:
+            path = os.path.join(self.test_dir, subpath)
+            lf = LocalFile.for_path(self.test_dir, subpath, do_checksum=True)
+            self.assertEqual(path, lf.path, path)
+            self.assertEqual(len(contents.encode("UTF-8")), lf.size, path)
+            self.assertEqual(exp_hash, lf.cksum, path)
+
+    def test__for_abspath(self):
+        for subpath, contents, exp_hash in BaycatTestCase.FILECONTENTS:
+            path = os.path.join(self.test_dir, subpath)
+            lf = LocalFile.for_abspath(self.test_dir, path, do_checksum=True)
+            self.assertEqual(path, lf.path, path)
+            self.assertEqual(len(contents.encode("UTF-8")), lf.size, path)
+            self.assertEqual(exp_hash, lf.cksum, path)
 
     def test_serdes__happy_path(self):
         lf = self._get_lf()
@@ -89,9 +101,68 @@ class TestLocalFile(unittest.TestCase):
         self.assertRaises(ChecksumKindException,
                           lambda: lf.delta(lf2, compare_checksums=False))
 
-        lf2 = self._get_lf("/etc")
+        lf2 = self._get_lf("a/afile2")
         self.assertRaises(PathMismatchException,
                           lambda: lf.delta(lf2))
+
+    def test_delta__fields(self):
+        # this is gonna hurt me more than it hurts you
+        def _assertDirty(lf_p, fields, **kwargs):
+            delta = lf_p.delta(lf, **kwargs)
+
+            mismatched_fields = []
+            for k, v in delta.items():
+                if k == "_dirty":
+                    if v != bool(fields):
+                        mismatched_fields.append(f'{k}: {v}')
+                elif k == "cksum":
+                    if lf.cksum is None:
+                        pass
+                elif v != (k in fields):
+                    mismatched_fields.append(f'{k}: {v}')
+
+            self.assertCountEqual([], mismatched_fields)
+
+        lf = self._get_lf(do_checksum=True)
+
+        # Quick first gut check that we're starting clean
+        lf2 = self._get_lf(do_checksum=True)
+        _assertDirty(lf2, [])
+
+        # And now to walk through fields
+        lf2 = self._get_lf()
+        lf2.size += 1
+        _assertDirty(lf2, ["size"])
+
+        lf2 = self._get_lf()
+        lf2.mtime_ns += 1
+        _assertDirty(lf2, ["mtime_ns"])
+
+        lf2 = self._get_lf()
+        lf2.cksum = '0123456'
+        _assertDirty(lf2, ["cksum"], compare_checksums=True)
+
+        # And make sure force recomputing the checksum does the right thing
+        lf2 = self._get_lf()
+        lf2.cksum = '0123456'
+        _assertDirty(lf2, ['_recomputed_cksum'], compare_checksums=True, force_checksum=True)
+
+        lf2 = self._get_lf()
+        lf2.cksum = None
+        _assertDirty(lf2, ['_recomputed_cksum'], compare_checksums=True, force_checksum=False)
+
+        lf2 = self._get_lf()
+        lf2.size += 1
+        lf2.mtime_ns += 1
+        _assertDirty(lf2, ["mtime_ns", "size"])
+
+        for k in lf.metadata.keys():
+            lf2 = self._get_lf()
+            lf2.metadata[k] += 1  # These are all numbers currently
+            if k != "atime_ns":
+                _assertDirty(lf2, [k])
+            else:
+                _assertDirty(lf2, [])
 
 
 if __name__ == '__main__':
