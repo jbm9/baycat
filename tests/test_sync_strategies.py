@@ -58,7 +58,9 @@ class TestSyncLocalToLocal(BaycatTestCase):
         m1 = Manifest.for_path(self.test_dir)
         m2 = Manifest.for_path(tgt_dir)
         sll = SyncLocalToLocal(m1, m2)
-        sll.sync()
+        m_got = sll.sync()
+
+        self.assertEqual(m1, m_got)
         self.assertEquivalentManifests(self.test_dir, tgt_dir)
 
 
@@ -177,6 +179,48 @@ class TestSyncLocalToLocal(BaycatTestCase):
         self.assertEqual(got["new_manifest"], m_orig)
         self.assertEqual(got["old_manifest"], m_restored)
 
+    def test_dry_run__copy(self):
+        # Make a destination directory, and capture its state
+        tgt_dir = os.path.join(self.base_dir, "tgt/x/y")
+        os.makedirs(tgt_dir)
+        m_tgt_orig = Manifest.for_path(tgt_dir)
 
-if __name__ == '__main__':
-    unittest.main()
+        # Run a dry run sync to it
+        m1 = Manifest.for_path(self.test_dir)
+        m2 = Manifest.for_path(tgt_dir)
+        sll = SyncLocalToLocal(m1, m2, dry_run=True)
+        sll.sync()
+
+        m_tgt_post = Manifest.for_path(tgt_dir)
+        self.assertEqual(m_tgt_orig, m_tgt_post)
+
+    def test_dry_run__delete_disabled(self):
+        # Make a destination directory, and capture its state
+        empty_dir = os.path.join(self.base_dir, "tgt/x/y")
+        os.makedirs(empty_dir)
+        m_test_orig = Manifest.for_path(self.test_dir)
+
+        # Run a dry run sync to it
+        m1 = Manifest.for_path(empty_dir)
+        m2 = Manifest.for_path(self.test_dir)
+        sll = SyncLocalToLocal(m1, m2, dry_run=True)
+        sll.sync()
+
+        m_test_post = Manifest.for_path(self.test_dir)
+        self.assertEqual(m_test_orig, m_test_orig)
+
+    def test_dry_run__delete_enabled(self):
+        # Make a destination directory, and capture its state
+        empty_dir = os.path.join(self.base_dir, "tgt/x/y")
+        os.makedirs(empty_dir)
+        m_test_orig = Manifest.for_path(self.test_dir)
+
+        # Run a dry run sync to it
+        m1 = Manifest.for_path(empty_dir)
+        m2 = Manifest.for_path(self.test_dir)
+        sll = SyncLocalToLocal(m1, m2, dry_run=True, enable_delete=True)
+        sll.sync()
+
+        m_test_post = Manifest.for_path(self.test_dir)
+        self.assertEqual(m_test_orig, m_test_orig)
+

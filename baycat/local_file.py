@@ -110,6 +110,8 @@ class LocalFile(JSONSerDes):
         return hash.hexdigest()
 
     def recompute_checksum(self):
+        if self.is_dir:
+            return
         self.cksum = self._md5(self.path)
 
     @classmethod
@@ -135,7 +137,10 @@ class LocalFile(JSONSerDes):
 
     @classmethod
     def for_abspath(cls, root_path, abs_path, **kwargs):
-        n = len(root_path) + 1
+        n = len(root_path)
+        if not root_path.endswith("/"):
+            n += 1
+
         return cls.for_path(root_path, abs_path[n:], **kwargs)
 
     def __str__(self):
@@ -185,7 +190,7 @@ class LocalFile(JSONSerDes):
             allkeys = set(a.keys()) | set(b.keys())
 
             for k in allkeys:
-                if k in ["metadata", "atime_ns", "collected"]:
+                if k in ["metadata", "atime_ns", "collected", "root_path", "path"]:
                     continue
                 if a.get(k, None) != b.get(k, None):
                     return False
@@ -197,3 +202,28 @@ class LocalFile(JSONSerDes):
 
         return _dict_cmp(my_fields.get("metadata", {}),
                          b_fields.get("metadata", {}))
+
+
+    def mark_contents_transferred(self, src_lf):
+        '''Mark that we have transfered the contents from the given LocalFile
+
+        This is used during the sync process, whenever a file is
+        transfered over.
+
+        NB: It is the responsibility of the caller to ensure that the
+        checksum of the source file and our new copy match.
+        '''
+        self.cksum_type = src_lf.cksum_type
+        self.cksum = src_lf.cksum
+        self.size = src_lf.size
+
+        self.metadata["atime_ns"], self.mtime_ns = src_lf.get_utime()
+
+
+    def mark_metadata_transferred(self, src_lf):
+        '''Mark that we transferred the metadata from the given LocalFile
+        '''
+        for f in ["uid", "gid", "mode"]:
+            self.metadata[f] = src_lf.metadata[f]
+
+        self.metadata["atime_ns"], self.mtime_ns = src_lf.get_utime()

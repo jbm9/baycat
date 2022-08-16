@@ -7,8 +7,16 @@
 \#*\#
 .\#*
 
-
 ####################
 # Coverage stuff
 .coverage
 htmlcov/
+
+####################
+# python build
+build/
+baycat.egg-info/
+
+####################
+# We sometimes make these
+.baycat_manifest

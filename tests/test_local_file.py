@@ -22,6 +22,21 @@ class TestLocalFile(BaycatTestCase):
         self.assertRaises(ReservedNameException,
                           lambda: LocalFile.for_path(self.test_dir, rel_path))
 
+    def test_str__doesnt_explode(self):
+        # This is a stupid smoke test
+        lf = self._get_lf()
+        s = str(lf)
+        self.assertTrue(True)
+
+    def test_copy(self):
+        lf = self._get_lf()
+        lf_copy = lf.copy()
+
+        self.assertEqual(lf, lf_copy)
+
+        lf_copy.rel_path = "/your/mom"
+        self.assertNotEqual(lf, lf_copy)
+
     def test__for_path(self):
         # NB: this does double-duty: it tests for_path very gently,
         # but it also lets us smoke test the filesystem population
@@ -42,6 +57,14 @@ class TestLocalFile(BaycatTestCase):
             self.assertEqual(len(contents.encode("UTF-8")), lf.size, path)
             self.assertEqual(exp_hash, lf.cksum, path)
 
+    def test__for_abspath_with_slash(self):
+        for subpath, contents, exp_hash in BaycatTestCase.FILECONTENTS:
+            path = os.path.join(self.test_dir, subpath)
+            lf = LocalFile.for_abspath(self.test_dir+"/", path, do_checksum=True)
+            self.assertEqual(path, lf.path, path)
+            self.assertEqual(len(contents.encode("UTF-8")), lf.size, path)
+            self.assertEqual(exp_hash, lf.cksum, path)
+
     def test_serdes__happy_path(self):
         lf = self._get_lf()
 
@@ -50,23 +73,6 @@ class TestLocalFile(BaycatTestCase):
         round_trip = LocalFile.from_json_obj(js_version)
 
         self.assertEqual(round_trip, lf)
-
-    def test_serdes__eq(self):
-        lf = self._get_lf()
-        lf2 = self._get_lf()
-
-        # We have to fudge this here
-        lf2.collected = lf.collected
-
-        self.assertEqual(lf, lf2)
-
-        lf2.cksum_type = "SHA-512"
-
-        self.assertNotEqual(lf, lf2)
-
-        self.assertNotEqual(lf, True)
-        self.assertNotEqual(lf, None)
-        self.assertNotEqual(lf, 42)
 
     def test_serdes__bogon(self):
         self.assertRaises(ValueError, lambda: LocalFile.from_json_obj({"hi": "mom"}))
@@ -80,6 +86,20 @@ class TestLocalFile(BaycatTestCase):
         round_trip = json.loads(json_body, object_hook=baycat_json_decoder)
 
         self.assertEqual(lf, round_trip)
+
+    def test_eq(self):
+        lf = self._get_lf()
+        lf2 = self._get_lf()
+
+        self.assertEqual(lf, lf2)
+
+        lf2.cksum_type = "SHA-512"
+
+        self.assertNotEqual(lf, lf2)
+
+        self.assertNotEqual(lf, True)
+        self.assertNotEqual(lf, None)
+        self.assertNotEqual(lf, 42)
 
     def test_delta__happy_path(self):
         lf = self._get_lf()
@@ -112,13 +132,13 @@ class TestLocalFile(BaycatTestCase):
 
             mismatched_fields = []
             for k, v in delta.items():
+                is_mismatch = (v != (k in fields))
                 if k == "_dirty":
-                    if v != bool(fields):
-                        mismatched_fields.append(f'{k}: {v}')
-                elif k == "cksum":
-                    if lf.cksum is None:
-                        pass
-                elif v != (k in fields):
+                    is_mismatch = (v != bool(fields))
+                elif k == "cksum" and v is None:
+                    is_mismatch = False
+
+                if is_mismatch:
                     mismatched_fields.append(f'{k}: {v}')
 
             self.assertCountEqual([], mismatched_fields)
@@ -163,7 +183,3 @@ class TestLocalFile(BaycatTestCase):
                 _assertDirty(lf2, [k])
             else:
                 _assertDirty(lf2, [])
-
-
-if __name__ == '__main__':
-    unittest.main()

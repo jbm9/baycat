@@ -8,38 +8,34 @@ import tempfile
 
 
 class SyncStrategy(ABC):
-    def __init__(self, manifest_src, manifest_dst, enable_delete=False):
+    def __init__(self, manifest_src, manifest_dst, enable_delete=False, dry_run=False):
         self.manifest_src = manifest_src
         self.manifest_dst = manifest_dst
+        self.manifest_xfer = manifest_dst.copy()
 
         self.enable_delete = enable_delete
+        self.dry_run = dry_run
 
     @abstractmethod
-    def sync(self, dry_run=False):
-        self.diff_state = manifest_src.diff_from(manifest_dst)
+    def sync(self):
+        '''Actually runs the sync process.
+        '''
 
     @abstractmethod
     def _rm_file(self, rel_p):
         '''rel_p the relative path to the file to delete from dst, if allowed'''
-        pass
 
     @abstractmethod
     def _transfer_file(self, rel_p):
         '''Copy file from the src to the dst'''
-        pass
 
     @abstractmethod
     def _transfer_metadata(self, rel_p):
         '''Copy metadata from src to dst for file at relative path rel_p'''
-        pass
-
-    def _m_path(self, m, rel_p):
-        lf = m.entries[rel_p]
-        return lf.path
 
 
 class SyncLocalToLocal(SyncStrategy):
-    def sync(self):
+    def sync(self, dry_run=False):
         self.diff_state = self.manifest_src.diff_from(self.manifest_dst)
 
         # Maintaining consistent directory metadata is a real pain.
@@ -59,6 +55,9 @@ class SyncLocalToLocal(SyncStrategy):
             for rel_p in self.diff_state["deleted"]:
                 self._rm_file(rel_p)
                 paths_touched.append(rel_p)
+        elif self.dry_run:
+            for rel_p in self.diff_state["deleted"]:
+                logging.info(f"dry_run: delete disabled, so not removing {rel_p}")
 
         # Create all the directories so our files have homes
         for rel_p in self.diff_state["added"]:
@@ -109,16 +108,28 @@ class SyncLocalToLocal(SyncStrategy):
         for _, d in sorted(list(dir_fixups)):
             self._transfer_metadata(d)
 
+
+        return self.manifest_xfer
+
     def _rm_file(self, rel_p):
         '''rel_p the relative path to the file to delete from dst, if allowed'''
-        dst_path = self.manifest_dst._expand_path(rel_p)
+        dst_path = self.manifest_dst._expand_path(rel_p)        
+        if self.dry_run:
+            logging.info(f"dry_run: remove {dst_path}")
+            return
         logging.debug(f'rm_file({dst_path})')
         os.unlink(dst_path)
+        self.manifest_xfer.mark_deleted(rel_p)
 
     def _mkdir(self, rel_p):
         '''Create an empty directory'''
         dst_path = self.manifest_dst._expand_path(rel_p)
+        if self.dry_run:
+            logging.info(f"dry_run: make directory (recursive) {dst_path}")
+            return
+        
         os.makedirs(dst_path, exist_ok=True)
+        self.manifest_xfer.mark_mkdir(rel_p)
 
     def _transfer_file(self, rel_p):
         '''Copy file from the src to the dst'''
@@ -126,6 +137,11 @@ class SyncLocalToLocal(SyncStrategy):
         src_path = self.manifest_src._expand_path(rel_p)
 
         src_lf = self.manifest_src.entries[rel_p]
+        if src_lf.is_dir:
+            return
+        if self.dry_run:
+            logging.info(f"dry_run: transfer {src_path} -> {dst_path}")
+            return
 
         logging.debug(f'cp {src_path} {dst_path}')
 
@@ -138,16 +154,26 @@ class SyncLocalToLocal(SyncStrategy):
         os.rename(dst_temp, dst_path)
         os.utime(dst_path, ns=src_lf.get_utime())
 
+        if rel_p in self.manifest_dst.entries:
+            self.manifest_xfer.entries[rel_p].mark_contents_transferred(src_lf)
+        else:
+            self.manifest_xfer.entries[rel_p] = src_lf.copy()
+
     def _transfer_metadata(self, rel_p):
         '''Copy metadata from src to dst for file at relative path rel_p'''
         dst_path = self.manifest_dst._expand_path(rel_p)
         src_path = self.manifest_src._expand_path(rel_p)
+        
+        if self.dry_run:
+            logging.info(f"dry_run: transfer metadata {src_path} -> {dst_path}")
+            return
 
         logging.debug(f'metadata copy {src_path} {dst_path}')
 
         src_lf = self.manifest_src.entries[rel_p]
-        dst_lf = self.manifest_src.entries[rel_p]
+        dst_lf = self.manifest_xfer.entries[rel_p]
 
         os.chown(dst_path, src_lf.metadata["uid"], src_lf.metadata["gid"])
         os.chmod(dst_path, src_lf.metadata["mode"])
         os.utime(dst_path, ns=src_lf.get_utime())
+        dst_lf.mark_metadata_transferred(src_lf)

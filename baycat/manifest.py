@@ -4,6 +4,7 @@ import os
 
 from .json_serdes import JSONSerDes, BaycatJSONEncoder, baycat_json_decoder
 from .file_selectors import PathSelector
+from .local_file import LocalFile, PATH_DUMMY_FILENAME
 
 MANIFEST_FILENAME = ".baycat_manifest"
 
@@ -12,16 +13,18 @@ class DifferentRootPathException(ValueError):
     '''Raised when an add_selection() can't be added to existing entries'''
     pass
 
+class ManifestAlreadyExists(ValueError):
+    pass
 
 class Manifest(JSONSerDes):
     JSON_CLASSNAME = "Manifest"
 
-    def __init__(self, path=MANIFEST_FILENAME):
+    def __init__(self, path=MANIFEST_FILENAME, root=None):
         self.path = path
-        self.root = None
+        self.root = root
         self.entries = {}  # path => LocalFile
 
-    def add_selector(self, sel):
+    def add_selector(self, sel, do_checksum=False):
         '''Add from the file_selector interface selector given'''
 
         if self.root is None:
@@ -32,13 +35,14 @@ class Manifest(JSONSerDes):
                 raise DifferentRootPathException(errstr)
 
         for lf in sel.walk():
+            lf.recompute_checksum()
             self.entries[lf.rel_path] = lf
 
     @classmethod
-    def for_path(cls, rootpath, path=MANIFEST_FILENAME):
+    def for_path(cls, rootpath, path=MANIFEST_FILENAME, do_checksum=False):
         ps = PathSelector(rootpath)
         result = Manifest(path=path)
-        result.add_selector(ps)
+        result.add_selector(ps, do_checksum=do_checksum)
         return result
 
     def _expand_path(self, rel_path):
@@ -49,7 +53,7 @@ class Manifest(JSONSerDes):
             path = self.path
 
         if not overwrite and os.path.exists(path):
-            raise ValueError(f"There is already a manifest at {path} and you didn't specify overwriting")
+            raise ManifestAlreadyExists(f"There is already a manifest at {path} and you didn't specify overwriting")
 
         with open(path, "w+") as f:
             json.dump(self, f, default=BaycatJSONEncoder.default)
@@ -67,6 +71,8 @@ class Manifest(JSONSerDes):
 
         # self.path is not checked here, as we can store the same
         # manifest in multiple locations.
+
+        # Similarly, self.root is not checked
 
         if len(self.entries) != len(m_b.entries):
             return False
@@ -89,6 +95,7 @@ class Manifest(JSONSerDes):
         result = {
             "_json_classname": self.JSON_CLASSNAME,
             "path": self.path,
+            "root": self.root,
             "entries": {}
         }
 
@@ -107,8 +114,11 @@ class Manifest(JSONSerDes):
             logging.debug(f'Got a value of class {obj["_json_classname"]} in Manifeste!')
             raise ValueError(f'Got invalid object!')
 
-        result = Manifest(path=obj["path"])
+        result = Manifest(path=obj["path"], root=obj["root"])
         result.entries = obj["entries"]
+        for k, v in result.entries.items():
+            if v.__class__ == dict:
+                result.entries[k] = baycat_json_decoder(v)
         return result
 
     def diff_from(self, old_manifest):
@@ -186,3 +196,13 @@ class Manifest(JSONSerDes):
         }
 
         return result
+
+    def mark_deleted(self, rel_path):
+        del self.entries[rel_path]
+
+
+    def mark_mkdir(self, rel_p):
+        dpath = rel_p
+        abspath = self._expand_path(rel_p)
+        # Just make a new entry, this is cheap on local FS
+        self.entries[dpath] = LocalFile.for_abspath(self.root, abspath)

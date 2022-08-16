@@ -32,6 +32,20 @@ class TestManifest(BaycatTestCase):
         self.assertRaises(ValueError,
                           lambda: Manifest.from_json_obj({"_json_classname": "YourMom"}))
 
+    def test_copy(self):
+        m = Manifest.for_path(self.test_dir)
+
+        m_copy = m.copy()
+
+        if m != m_copy:
+            print(m.diff_from(m_copy))
+        
+        self.assertEqual(m, m_copy)
+
+        lf_copy = list(m_copy.entries.values())[0]
+        lf_copy.mtime_ns = int(time.time())
+        self.assertNotEqual(m, m_copy, m.diff_from(m_copy))
+
     def test_save_load__happy_path(self):
         ps = PathSelector(os.path.join(self.test_dir, "a"))
 
@@ -195,7 +209,3 @@ class TestManifest(BaycatTestCase):
 
         ps3 = PathSelector(os.path.join(self.test_dir, "a", "b"))
         self.assertRaises(DifferentRootPathException, lambda: m.add_selector(ps3))
-
-
-if __name__ == '__main__':
-    unittest.main()

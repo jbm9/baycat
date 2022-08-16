@@ -11,6 +11,14 @@ class JSONSerDes:
     def __init__(self):
         self._json_classname = JSON_CLASSNAME
 
+    def copy(self):
+        '''Does a value copy of our object
+
+        This does a trivial/naive JSON round-trip to get a copy of
+        the object.
+        '''
+        return self.__class__.from_json_obj(self.to_json_obj())
+
     @abstractmethod
     def to_json_obj(self):
         return vars(self)
@@ -22,7 +30,14 @@ class JSONSerDes:
     @classmethod
     @abstractmethod
     def from_json_obj(cls, json_obj):
-        return cls(json_obj)
+        result = cls(json_obj)
+        if not result.entries:
+            return result
+
+        if result.entries.values()[0].__class__ == dict:
+            raise ValueError("Got partial decode")
+
+        return result
 
 
 class BaycatJSONEncoder(json.JSONEncoder):

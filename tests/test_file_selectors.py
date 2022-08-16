@@ -52,7 +52,3 @@ class TestFileSelectors(BaycatTestCase):
             got_paths.append(lf.path)
 
         self.assertEqual(sorted(got_paths), sorted(expected_paths))
-
-
-if __name__ == '__main__':
-    unittest.main()
