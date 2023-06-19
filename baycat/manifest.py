@@ -16,6 +16,7 @@ class DifferentRootPathException(ValueError):
     '''Raised when an add_selection() can't be added to existing entries'''
     pass
 
+
 class ManifestAlreadyExists(ValueError):
     pass
 
@@ -108,7 +109,7 @@ class Manifest(JSONSerDes):
 
         if do_checksum:
             f_ck_args = [ (k, v.path)
-                          for k,v in self.entries.items() if not v.is_dir]
+                          for k, v in self.entries.items() if not v.is_dir]
 
             logging.debug(f'Got {len(f_ck_args)} args')
             if self.poolsize == 1:
@@ -120,7 +121,6 @@ class Manifest(JSONSerDes):
                     # required to collect results before the pool goes
                     # out of scope.
                     d_cksums = list(p.imap_unordered(f_ck, f_ck_args))
-
 
             for rel_p, cksum in d_cksums:
                 self.entries[rel_p].cksum = cksum

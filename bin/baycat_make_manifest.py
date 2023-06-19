@@ -33,7 +33,7 @@ if options.debug:
 logging.debug(f'options: {options}')
 
 manifest_path = options.output or os.path.join(options.dirpath,
-                                                MANIFEST_FILENAME)
+                                               MANIFEST_FILENAME)
 
 logging.debug(f'Manifest path: {manifest_path}')
 try:

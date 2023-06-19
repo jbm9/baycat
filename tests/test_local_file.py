@@ -223,4 +223,3 @@ class TestLocalFile(BaycatTestCase):
         # And then we notice the difference
         self.assertTrue(lf5.changed_from(lf3, force_checksum=True))
 
-

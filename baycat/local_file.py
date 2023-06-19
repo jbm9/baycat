@@ -159,7 +159,7 @@ class LocalFile(JSONSerDes):
 
         if not abs_path.startswith(root_path):
             raise PathMismatchException(f"abs_path '{abs_path}' does not begin with root_path {root_path}")
-        
+
         n = len(root_path)
         if not root_path.endswith("/"):
             n += 1
@@ -227,6 +227,11 @@ class LocalFile(JSONSerDes):
                          b_fields.get("metadata", {}))
 
     def changed_from(self, rhs, force_checksum=False):
+        '''Returns a bool whether or not this file is changed compared to 'rhs'
+
+        rhs: the file entry from another Manifest corresponding to this file
+        force_checksum: force a full recompute of the local checksum (expensive)
+        '''
         # Check metadata quickly
         if self.size != rhs.size or self.mtime_ns != rhs.mtime_ns:
             return True
@@ -264,7 +269,6 @@ class LocalFile(JSONSerDes):
         self.size = src_lf.size
 
         self.metadata["atime_ns"], self.mtime_ns = src_lf.get_utime()
-
 
     def mark_metadata_transferred(self, src_lf):
         '''Mark that we transferred the metadata from the given LocalFile

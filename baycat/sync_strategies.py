@@ -108,12 +108,11 @@ class SyncLocalToLocal(SyncStrategy):
         for _, d in sorted(list(dir_fixups)):
             self._transfer_metadata(d)
 
-
         return self.manifest_xfer
 
     def _rm_file(self, rel_p):
         '''rel_p the relative path to the file to delete from dst, if allowed'''
-        dst_path = self.manifest_dst._expand_path(rel_p)        
+        dst_path = self.manifest_dst._expand_path(rel_p)
         if self.dry_run:
             logging.info(f"dry_run: remove {dst_path}")
             return
@@ -127,7 +126,7 @@ class SyncLocalToLocal(SyncStrategy):
         if self.dry_run:
             logging.info(f"dry_run: make directory (recursive) {dst_path}")
             return
-        
+
         os.makedirs(dst_path, exist_ok=True)
         self.manifest_xfer.mark_mkdir(rel_p)
 
@@ -163,7 +162,7 @@ class SyncLocalToLocal(SyncStrategy):
         '''Copy metadata from src to dst for file at relative path rel_p'''
         dst_path = self.manifest_dst._expand_path(rel_p)
         src_path = self.manifest_src._expand_path(rel_p)
-        
+
         if self.dry_run:
             logging.info(f"dry_run: transfer metadata {src_path} -> {dst_path}")
             return
@@ -177,7 +176,6 @@ class SyncLocalToLocal(SyncStrategy):
         os.chmod(dst_path, src_lf.metadata["mode"])
         os.utime(dst_path, ns=src_lf.get_utime())
         dst_lf.mark_metadata_transferred(src_lf)
-
 
 
 class SyncLocalToS3(SyncStrategy):
@@ -253,7 +251,6 @@ class SyncLocalToS3(SyncStrategy):
         # decreasing depth.
         for _, d in sorted(list(dir_fixups)):
             self._transfer_metadata(d)
-
 
         return self.manifest_xfer
 

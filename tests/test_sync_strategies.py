@@ -63,7 +63,6 @@ class TestSyncLocalToLocal(BaycatTestCase):
         self.assertEqual(m1, m_got)
         self.assertEquivalentManifests(self.test_dir, tgt_dir)
 
-
     def _mangle_target_dir(self, tgt_dir):
         ##############################
         # Make a bunch of changes
