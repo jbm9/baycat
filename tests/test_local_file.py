@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 import unittest
 
 from context import baycat, BaycatTestCase
@@ -37,7 +38,7 @@ class TestLocalFile(BaycatTestCase):
         lf_copy.rel_path = "/your/mom"
         self.assertNotEqual(lf, lf_copy)
 
-    def test__for_path(self):
+    def test_for_path__happypath(self):
         # NB: this does double-duty: it tests for_path very gently,
         # but it also lets us smoke test the filesystem population
         # helpers in BaycatTestCase.
@@ -49,7 +50,7 @@ class TestLocalFile(BaycatTestCase):
             self.assertEqual(len(contents.encode("UTF-8")), lf.size, path)
             self.assertEqual(exp_hash, lf.cksum, path)
 
-    def test__for_abspath(self):
+    def test_for_abspath(self):
         for subpath, contents, exp_hash in BaycatTestCase.FILECONTENTS:
             path = os.path.join(self.test_dir, subpath)
             lf = LocalFile.for_abspath(self.test_dir, path, do_checksum=True)
@@ -57,7 +58,10 @@ class TestLocalFile(BaycatTestCase):
             self.assertEqual(len(contents.encode("UTF-8")), lf.size, path)
             self.assertEqual(exp_hash, lf.cksum, path)
 
-    def test__for_abspath_with_slash(self):
+    def test_for_abspath__misrooted(self):
+        self.assertRaises(PathMismatchException, lambda: LocalFile.for_abspath(self.test_dir, '/etc/passwd'))
+
+    def test_for_abspath__with_slash(self):
         for subpath, contents, exp_hash in BaycatTestCase.FILECONTENTS:
             path = os.path.join(self.test_dir, subpath)
             lf = LocalFile.for_abspath(self.test_dir+"/", path, do_checksum=True)
@@ -183,3 +187,40 @@ class TestLocalFile(BaycatTestCase):
                 _assertDirty(lf2, [k])
             else:
                 _assertDirty(lf2, [])
+
+    def test_changed_from(self):
+        lf = self._get_lf()
+        lf2 = self._get_lf()
+
+        self.assertEqual(lf, lf2)
+        self.assertFalse( lf.changed_from(lf2) )
+
+        # Change mtime and size
+        p = os.path.join(self.test_dir, self.FILECONTENTS[0][0])
+        with open(p, "w") as fh:
+            fh.write("This is different content")
+
+        lf3 = self._get_lf(do_checksum=True)
+        self.assertTrue(lf.changed_from(lf3))
+
+        # Now change mtime with different size
+        with open(p, "w") as fh:
+            fh.write("This is different cont123")
+        time.sleep(0.01)
+
+        lf4 = self._get_lf(do_checksum=False)
+
+        self.assertTrue(lf.changed_from(lf4))
+        self.assertTrue(lf3.changed_from(lf4))
+
+        # Let's transfer the metadata, and only compare checksums
+        os.utime(p, ns=lf3.get_utime())
+        time.sleep(0.01)
+        lf5 = self._get_lf()
+
+        # Should be equivalent unless we force checksums
+        self.assertFalse(lf5.changed_from(lf3))
+        # And then we notice the difference
+        self.assertTrue(lf5.changed_from(lf3, force_checksum=True))
+
+

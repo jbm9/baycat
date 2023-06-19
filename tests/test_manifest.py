@@ -36,10 +36,6 @@ class TestManifest(BaycatTestCase):
         m = Manifest.for_path(self.test_dir)
 
         m_copy = m.copy()
-
-        if m != m_copy:
-            print(m.diff_from(m_copy))
-        
         self.assertEqual(m, m_copy)
 
         lf_copy = list(m_copy.entries.values())[0]
@@ -125,6 +121,11 @@ class TestManifest(BaycatTestCase):
         m = Manifest(path=mpath)
         m.add_selector(ps)
 
+        m_copy = m.copy()
+        self.assertEqual(m, m_copy)
+        m_copy.update()
+        self.assertEqual(m, m_copy)
+
         m2 = Manifest(path=mpath+"2")
         m2.add_selector(ps)
 
@@ -143,6 +144,9 @@ class TestManifest(BaycatTestCase):
 
         m = Manifest(path=mpath)
         m.add_selector(ps)
+
+        m_orig_copy = m.copy()
+        self.assertEqual(m, m_orig_copy)
 
         def _ith_path(i):
             # Get the full path to the i'th test file
@@ -177,6 +181,10 @@ class TestManifest(BaycatTestCase):
         self.assertEqual(got["new_manifest"], m)
         self.assertEqual(got["old_manifest"], m2)
 
+        self.assertNotEqual(m_orig_copy, m2)
+        m_orig_copy.update()
+        self.assertEqual(m_orig_copy, m2)
+
     def test_add_selector__twice_is_noop(self):
         ps = PathSelector(os.path.join(self.test_dir, "a"))
 
@@ -209,3 +217,47 @@ class TestManifest(BaycatTestCase):
 
         ps3 = PathSelector(os.path.join(self.test_dir, "a", "b"))
         self.assertRaises(DifferentRootPathException, lambda: m.add_selector(ps3))
+
+    def test_add_selector__checksums(self):
+        ps = PathSelector(os.path.join(self.test_dir, ""))
+
+        mpath = os.path.join(self.test_dir, ".baycat_manifest")
+        logging.basicConfig(level=logging.DEBUG)
+
+        m = Manifest(poolsize=1)  # Keep it in the single process for test coverage
+        m.add_selector(ps, do_checksum=True)
+
+        n_checked = 0
+        for rp, _, cksum in self.FILECONTENTS:
+            self.assertEqual(cksum, m.entries[rp].cksum, rp)
+            n_checked += 1
+
+        # Double-check that we haven't screwed up and NO-OPed
+        self.assertTrue(bool(n_checked))
+
+    def test_add_selector__no_checksums(self):
+        ps = PathSelector(os.path.join(self.test_dir, ""))
+
+        mpath = os.path.join(self.test_dir, ".baycat_manifest")
+
+        m = Manifest()
+        m.add_selector(ps, do_checksum=False)
+
+        n_checked = 0
+        for rp, _, cksum in self.FILECONTENTS:
+            self.assertEqual(None, m.entries[rp].cksum, rp)
+            n_checked += 1
+
+        # Double-check that we haven't screwed up and NO-OPed
+        self.assertTrue(bool(n_checked))
+
+    def test_for_path__checksums(self):
+        m = Manifest.for_path(self.test_dir, do_checksum=True, poolsize=1)
+
+        n_checked = 0
+        for rp, _, cksum in self.FILECONTENTS:
+            self.assertEqual(cksum, m.entries[rp].cksum, rp)
+            n_checked += 1
+
+        # Double-check that we haven't screwed up and NO-OPed
+        self.assertTrue(bool(n_checked))

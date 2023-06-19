@@ -19,6 +19,9 @@ parser.add_option("-o", "--output", default=None,
 parser.add_option("-w", "--overwrite", action='store_true', default=False,
                   help="Enable overwriting an existing manifest file")
 
+parser.add_option("--poolsize", type=int, default=None, metavar="N",
+                  help="Number of checksum subprocesses to spawn (default=# of CPUs)")
+
 parser.add_option("--debug", action='store_true', default=False)
 
 
@@ -34,7 +37,10 @@ manifest_path = options.output or os.path.join(options.dirpath,
 
 logging.debug(f'Manifest path: {manifest_path}')
 try:
-    m = Manifest.for_path(options.dirpath, path=manifest_path)
+    m = Manifest.for_path(options.dirpath,
+                          path=manifest_path,
+                          do_checksum=True,
+                          poolsize=options.poolsize)
     m.save(overwrite=options.overwrite)
 except ManifestAlreadyExists:
     logging.error(f"Manifest already exists.  Re-run with --overwrite (-w).")

@@ -14,12 +14,18 @@ from baycat.local_file import LocalFile
 class BaycatTestCase(unittest.TestCase):
     '''Base class for all baycat test cases
 
-    This is a pretty straigthforward set of helper methods that create
+    This is a pretty straightforward set of helper methods that create
     a fresh directory for unit tests to work against, and manipulate
     at will.
     '''
     # A set of directories to create.  You can bum these down to just
     # the leaf directories in the structure, to simplify life a bit.
+    # That is, 'a/b/c/d' will create 'a/', then 'a/b/', then 'a/b/c/',
+    # and finally the last directory, 'a/b/c/d/'.
+    #
+    # Note that some of these should be empty, to test our creation of
+    # empty directories.  Ideally, we will have a small chain of empty
+    # subdirs, to catch any errors in descending into those.
     LEAF_DIRS = ["a/b/c/d"]
 
     # These are the dummy files and their contents that we set up
@@ -57,9 +63,11 @@ class BaycatTestCase(unittest.TestCase):
         self.test_dir = self._build_dirs("0", self.LEAF_DIRS, self.FILECONTENTS)
 
     def tearDown(self):
+        '''Currently just nukes the tempdir we created in setUp'''
         shutil.rmtree(self.base_dir)
 
     def _get_lf(self, subpath=None, do_checksum=False):
+        # Get a LocalFile for the given path, or the default if none given
         if subpath is None:
             subpath = self.FILECONTENTS[0][0]
 

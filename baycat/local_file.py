@@ -5,7 +5,7 @@ import math
 import os
 import time
 
-from hashlib import md5
+from _md5 import md5
 
 from .json_serdes import JSONSerDes
 
@@ -20,6 +20,14 @@ class PathMismatchException(ValueError): pass
 
 
 class LocalFile(JSONSerDes):
+    '''A single file (or directory) on the local disk
+
+    This class encapsulates all the state information about the given
+    file, including its metadata and checksum (if one has been
+    computed).  This is also used to hold the metadata for
+    directories.
+
+    '''
     JSON_CLASSNAME = "LocalFile"
 
     def __init__(self, root_path, rel_path, statinfo, cksum=None, cksum_type="MD5", is_dir=False):
@@ -100,6 +108,8 @@ class LocalFile(JSONSerDes):
 
     @classmethod
     def _md5(cls, path, chunksize=32*1024):
+        '''Internal helper method: compute the MD5 of the file at a given path
+        '''
         hash = md5()
         with open(path, "rb") as f:
             while True:
@@ -116,6 +126,13 @@ class LocalFile(JSONSerDes):
 
     @classmethod
     def for_path(cls, root_path, rel_path, is_dir=False, do_checksum=False):
+        '''Constructor method: generate a LocalFile for a given path
+
+        root_path: the path to the directory this baycat manifest is rooted under
+        rel_path: the path to the file/directory relative to root_path
+        is_dir: a flag for whether or not is a directory
+        do_checksum: set to True to request a checksum to be computed (otherwise it's left blank)
+        '''
         path = os.path.join(root_path, rel_path)
         sr = os.stat(path, follow_symlinks=False)
 
@@ -137,6 +154,12 @@ class LocalFile(JSONSerDes):
 
     @classmethod
     def for_abspath(cls, root_path, abs_path, **kwargs):
+        '''
+        '''
+
+        if not abs_path.startswith(root_path):
+            raise PathMismatchException(f"abs_path '{abs_path}' does not begin with root_path {root_path}")
+        
         n = len(root_path)
         if not root_path.endswith("/"):
             n += 1
@@ -203,6 +226,29 @@ class LocalFile(JSONSerDes):
         return _dict_cmp(my_fields.get("metadata", {}),
                          b_fields.get("metadata", {}))
 
+    def changed_from(self, rhs, force_checksum=False):
+        # Check metadata quickly
+        if self.size != rhs.size or self.mtime_ns != rhs.mtime_ns:
+            return True
+
+        for k in self.metadata.keys():
+            if k == "atime_ns":
+                continue
+            if self.metadata[k] != rhs.metadata[k]:
+                return True
+
+        # If we're forced to update our checksum, do so
+        if force_checksum:
+            self.recompute_checksum()
+
+        # And now actually work with checksum data
+        if self.cksum is None:
+            return False
+
+        if self.cksum != rhs.cksum:
+            return True
+
+        return False
 
     def mark_contents_transferred(self, src_lf):
         '''Mark that we have transfered the contents from the given LocalFile
