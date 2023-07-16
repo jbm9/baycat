@@ -2,7 +2,7 @@ init:
 	pip install -r requirements.txt
 
 test:
-	python -m unittest discover -s tests/
+	python3 -m unittest discover -s tests/
 
 coverage:
 	coverage run --branch -m unittest discover -s tests/
