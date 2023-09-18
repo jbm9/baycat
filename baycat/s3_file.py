@@ -58,7 +58,7 @@ class S3File(JSONSerDes):
         self.root_path = root_path
         self.rel_path = self._s3path_to_rel(obj_summary["Key"])
         self.path = obj_summary["Key"]
-        self.cksum = obj_summary["ETag"][1:-1]  # Remove the goofy quotes
+        self.cksum = obj_summary["ETag"].strip('"')
         self.cksum_type = "MD5"
         self.is_dir = False
 
