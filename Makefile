@@ -9,6 +9,6 @@ coverage:
 	coverage html
 
 codestyle:
-	pycodestyle . --exclude=".#*" --max-line-length=120
+	pycodestyle . --exclude=".#*" --exclude=".venv/*" --max-line-length=120
 
 .PHONY: init test coverage codestyle

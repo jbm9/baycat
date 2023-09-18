@@ -17,6 +17,9 @@ htmlcov/
 build/
 baycat.egg-info/
 
+.venv/
+
 ####################
 # We sometimes make these
 .baycat_manifest
+.s3baycat_manifest
