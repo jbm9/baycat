@@ -1,3 +1,5 @@
 coverage
 pycodestyle
 boto3
+
+moto

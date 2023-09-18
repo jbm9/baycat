@@ -1,13 +1,19 @@
+import datetime
+from io import BytesIO
 import os
 import shutil
 import sys
 import tempfile
 import unittest
 
+import boto3
+from moto import mock_s3
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
 import baycat
 from baycat.local_file import LocalFile
+from baycat.s3_file import S3File
 
 
 class BaycatTestCase(unittest.TestCase):
@@ -39,6 +45,10 @@ class BaycatTestCase(unittest.TestCase):
              "5cb7a8a7b77a0bdedc3f1a5ee7392743"),
         ]
 
+    # Name of our testing S3 bucket
+    BUCKET_NAME = "mah_bukkit"
+    S3_PATH = "/oh/no/"
+
     def _build_dirs(self, base_suffix, leaf_dirs, file_contents):
         dpath = os.path.join(self.base_dir, base_suffix)
         os.makedirs(dpath, exist_ok=True)
@@ -53,6 +63,25 @@ class BaycatTestCase(unittest.TestCase):
 
         return dpath
 
+    def _mk_bucket(self, bucket_name):
+        s3 = boto3.resource("s3")
+        bucket = s3.create_bucket(Bucket=bucket_name,
+                                  CreateBucketConfiguration={
+                                      'LocationConstraint': 'ur-butt-1'})
+        return bucket
+
+    def _build_s3(self, bucket_name, file_contents):
+        self.mock_s3 = mock_s3()
+        self.mock_s3.start()
+
+        # Set up our S3
+        bucket = self._mk_bucket(bucket_name)
+
+        for subpath, content, _ in file_contents:
+            dstpath = os.path.join(self.S3_PATH, subpath)
+            fh = BytesIO(content.encode("UTF8"))
+            bucket.upload_fileobj(fh, dstpath)
+
     def setUp(self):
         '''Creates a temporary test directory, and populates it with the
         directories and files as expected.
@@ -61,8 +90,11 @@ class BaycatTestCase(unittest.TestCase):
 
         self.test_dir = self._build_dirs("0", self.LEAF_DIRS, self.FILECONTENTS)
 
+        self._build_s3(self.BUCKET_NAME, self.FILECONTENTS)
+
     def tearDown(self):
         '''Currently just nukes the tempdir we created in setUp'''
+        self.mock_s3.stop()
         shutil.rmtree(self.base_dir)
 
     def _get_lf(self, subpath=None, do_checksum=False):
@@ -71,6 +103,16 @@ class BaycatTestCase(unittest.TestCase):
             subpath = self.FILECONTENTS[0][0]
 
         return LocalFile.for_path(self.test_dir, subpath, do_checksum=do_checksum)
+
+    def _get_s3f(self, root_path="/lol/", objsum=None, key=None):
+        if objsum is None:
+            objsum = {
+                "Key": os.path.join(root_path, self.FILECONTENTS[0][0]) if key is None else key,
+                "ETag": self.FILECONTENTS[0][2],
+                "Size": len(self.FILECONTENTS[0][1]),
+                "LastModified": datetime.datetime(2022, 3, 4),
+            }
+        return S3File(root_path, objsum)
 
     def _ith_path(self, i, tgt_dir=None, fileset=None):
         # Get the full path to the i'th test file
