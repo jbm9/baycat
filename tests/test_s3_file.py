@@ -43,7 +43,7 @@ class TestS3File(BaycatTestCase):
     def test_serdes__with_json_lib(self):
         s3f = self._get_s3f()
 
-        json_body = json.dumps(s3f, default=BaycatJSONEncoder.default)
+        json_body = json.dumps(s3f, default=BaycatJSONEncoder().default)
         d = json.loads(json_body)
         round_trip = json.loads(json_body, object_hook=baycat_json_decoder)
 

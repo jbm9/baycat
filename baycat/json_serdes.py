@@ -30,19 +30,10 @@ class JSONSerDes:
     @classmethod
     @abstractmethod
     def from_json_obj(cls, json_obj):
-        result = cls(json_obj)
-        if not result.entries:
-            return result
-
-        if result.entries.values()[0].__class__ == dict:
-            raise ValueError("Got partial decode")
-
-        return result
-
+        pass
 
 class BaycatJSONEncoder(json.JSONEncoder):
-    @staticmethod
-    def default(obj):
+    def default(self, obj):
         if isinstance(obj, JSONSerDes):
             return obj.to_json_obj()
         return json.JSONEncoder.default(self, obj)

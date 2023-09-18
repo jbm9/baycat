@@ -18,10 +18,15 @@ class DifferentRootPathException(ValueError):
 
 
 class ManifestAlreadyExists(ValueError):
+    '''Raised when a manifest file already exist'''
     pass
 
 
 def f_ck(rp_ap):
+    '''Internal: Checksum the given (rel_path,abspath) tuple
+
+    returns a (rel_path, hexdigest) tuple
+    '''
     chunksize = 32 * 1024
     rel_path, abspath = rp_ap
 
@@ -148,7 +153,7 @@ class Manifest(JSONSerDes):
             raise ManifestAlreadyExists(f"There is already a manifest at {path} and you didn't specify overwriting")
 
         with open(path, "w+") as f:
-            json.dump(self, f, default=BaycatJSONEncoder.default)
+            json.dump(self, f, default=BaycatJSONEncoder().default)
 
     @classmethod
     def load(self, path):

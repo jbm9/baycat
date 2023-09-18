@@ -85,7 +85,7 @@ class TestLocalFile(BaycatTestCase):
     def test_serdes__with_json_lib(self):
         lf = self._get_lf()
 
-        json_body = json.dumps(lf, default=BaycatJSONEncoder.default)
+        json_body = json.dumps(lf, default=BaycatJSONEncoder().default)
         d = json.loads(json_body)
         round_trip = json.loads(json_body, object_hook=baycat_json_decoder)
 
