@@ -193,7 +193,26 @@ class TestLocalFile(BaycatTestCase):
         lf2 = self._get_lf()
 
         self.assertEqual(lf, lf2)
-        self.assertFalse( lf.changed_from(lf2) )
+        self.assertFalse(lf.changed_from(lf2))
+        self.assertFalse(lf2.changed_from(lf))
+
+        # Now we mess with checksum logic
+        lf.cksum = None
+        lf2.cksum = "0"
+        self.assertNotEqual(lf.cksum, lf2.cksum)
+        # lf should not have a checksum, so it can't tell
+        self.assertFalse(lf.changed_from(lf2))
+        # but lf2 has a checksum, so it can be assertive
+        self.assertTrue(lf2.changed_from(lf))
+
+        # Give lf a checksum, so it can see things, too
+        lf.cksum = "1"
+        self.assertTrue(lf.changed_from(lf2))
+        self.assertTrue(lf2.changed_from(lf))
+
+        lf2.cksum = lf.cksum
+        self.assertFalse(lf.changed_from(lf2))
+        self.assertFalse(lf2.changed_from(lf))
 
         # Change mtime and size
         p = os.path.join(self.test_dir, self.FILECONTENTS[0][0])
@@ -222,4 +241,3 @@ class TestLocalFile(BaycatTestCase):
         self.assertFalse(lf5.changed_from(lf3))
         # And then we notice the difference
         self.assertTrue(lf5.changed_from(lf3, force_checksum=True))
-
