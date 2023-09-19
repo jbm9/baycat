@@ -1,3 +1,4 @@
+from io import BytesIO
 import json
 import logging
 import os
@@ -6,18 +7,19 @@ import shutil
 import time
 import tempfile
 
+import boto3
+
 from context import baycat, BaycatTestCase
 
 from baycat.file_selectors import PathSelector
 from baycat.manifest import Manifest
 from baycat.local_file import LocalFile, ReservedNameException
 from baycat.json_serdes import BaycatJSONEncoder, baycat_json_decoder
-
-from baycat.sync_strategies import SyncLocalToLocal
+from baycat.s3_manifest import S3Manifest
+from baycat.sync_strategies import SyncLocalToLocal, SyncLocalToS3
 
 
 class TestSyncLocalToLocal(BaycatTestCase):
-
     def _copy_test_dir_via_sll(self):
         m = Manifest()
         ps = PathSelector(self.test_dir)
@@ -223,3 +225,70 @@ class TestSyncLocalToLocal(BaycatTestCase):
         m_test_post = Manifest.for_path(self.test_dir)
         self.assertEqual(m_test_orig, m_test_orig)
 
+
+class TestSyncLocalToS3(BaycatTestCase):
+    def test__smoke_test(self):
+        m = Manifest()
+        ps = PathSelector(self.test_dir)
+        m.add_selector(ps)
+
+        dst_bucket = "dst"
+        bucket = self._mk_bucket(dst_bucket)
+        m2 = S3Manifest.from_bucket(dst_bucket)
+        self.assertEqual(len(m2.entries), 0)
+
+        sls3 = SyncLocalToS3(bucket, m, m2)
+
+        sls3.sync()
+
+        m_got = S3Manifest.from_bucket(dst_bucket)
+        orig_files = [ lf for lf in m.entries.values() if not lf.is_dir ]
+        self.assertEqual(len(m_got.entries), len(orig_files))
+
+        ########################################
+        # Now we add some files locally and try it again.
+
+        self._build_dirs("0", ["z"], [("z/zfile", "whee", "eaaff0f66f4f3bc0a1acc9820b3666de")])
+        m_new = Manifest()
+        ps = PathSelector(self.test_dir)
+        m_new.add_selector(ps)
+
+        new_files = [ lf for lf in m_new.entries.values() if not lf.is_dir ]
+        self.assertNotEqual(len(orig_files), len(new_files))
+        self.assertNotEqual(len(m_got.entries), len(new_files))
+
+        sls3_new = SyncLocalToS3(bucket, m_new, m_got)
+        sls3_new.sync()
+
+        m_got_new = S3Manifest.from_bucket(dst_bucket)
+        self.assertEqual(len(m_got_new.entries), len(new_files))
+
+        ########################################
+        # And now we touch a file and see what happens
+        i_mangle = 0
+        p = self._ith_path(i_mangle)
+        rel_p = self.FILECONTENTS[i_mangle][i_mangle]
+        s3_p = os.path.join(m_got.prefix, rel_p)
+        new_content = "changed contents"
+
+        with open(p, "w") as fh:
+            fh.write(new_content)
+
+        m_mangled = Manifest()
+        ps = PathSelector(self.test_dir)
+        m_mangled.add_selector(ps)
+
+        mangled_files = [ lf for lf in m_mangled.entries.values() if not lf.is_dir ]
+        self.assertEqual(len(mangled_files), len(new_files))
+
+        sls3_mangled = SyncLocalToS3(bucket, m_mangled, m_got)
+        sls3_mangled.sync()
+
+        m_got_mangled = S3Manifest.from_bucket(dst_bucket)
+        self.assertEqual(len(m_got_mangled.entries), len(mangled_files))
+
+        s3 = boto3.client("s3")
+        result_fh = BytesIO()
+        s3.download_fileobj(dst_bucket, s3_p, result_fh)
+        got_contents = result_fh.getvalue().decode("UTF8")
+        self.assertEqual(got_contents, new_content)
