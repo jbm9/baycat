@@ -11,6 +11,7 @@ baycat is optimized for local IOPs and AWS cost.  It's intended to
 sync my homelab stack up to S3 for storage, but designed to allow
 future extensions to handle other mirror-style operations.
 
+
 ## Sketch of Operation
 
 The general idea here is to trust the filesystem metadata to only
@@ -28,6 +29,22 @@ checks are then very simple:
 * Compute a set of operations to synchronize the two
 * Execute those ops as we can
 * Update the remote manifest
+
+
+# Usage
+
+TODO.
+
+# Random notes
+
+## Rationalization of the metadata storage
+
+baycat solves the problem of storing unix metadata differently than
+s3cmd does.  s3cmd uses some headers provided by S3 to stash the
+attributes for later.  This would work for S3 (and make us s3cmd
+compatible), but I envision baycat being expanded to support HTTP as a
+download medium, so having the metadata in a file in the repo is a
+better option.
 
 ## Administrivia
 
