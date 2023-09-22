@@ -137,3 +137,7 @@ class S3Manifest(JSONSerDes):
                 return False
 
         return True
+
+    def mark_mkdir(self, rel_p):
+        '''Callback of sorts for a successful mkdir call; not needed in S3'''
+        pass

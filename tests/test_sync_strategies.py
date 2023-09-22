@@ -20,6 +20,14 @@ from baycat.sync_strategies import SyncLocalToLocal, SyncLocalToS3
 
 
 class TestSyncLocalToLocal(BaycatTestCase):
+    def _assert_counters(self, sll, **kwargs):
+        for k,v in kwargs.items():
+            msg = f'Mismatch for counter {k}: {sll._counters} / {kwargs}'
+            self.assertEqual(v, sll._counters[k], msg)
+
+        for k in sll._counters.keys():
+            self.assertTrue(k in kwargs, f'Found {k} in counters: {sll._counters}')
+
     def _copy_test_dir_via_sll(self):
         m = Manifest()
         ps = PathSelector(self.test_dir)
@@ -61,6 +69,8 @@ class TestSyncLocalToLocal(BaycatTestCase):
         m2 = Manifest.for_path(tgt_dir)
         sll = SyncLocalToLocal(m1, m2)
         m_got = sll.sync()
+
+        self._assert_counters(sll)  # shouldn't be anything here.
 
         self.assertEqual(m1, m_got)
         self.assertEquivalentManifests(self.test_dir, tgt_dir)
@@ -123,6 +133,7 @@ class TestSyncLocalToLocal(BaycatTestCase):
         # Now apply the diff and ensure it restores state
         sll = SyncLocalToLocal(m_orig, m_after)
         sll.sync()
+        self._assert_counters(sll, xfer=2, xfer_metadata=2+3, delete_skipped=1)
 
         m_orig = Manifest.for_path(self.test_dir)
         m_restored = Manifest.for_path(tgt_dir)
@@ -166,6 +177,7 @@ class TestSyncLocalToLocal(BaycatTestCase):
         # Now apply the diff and ensure it restores state
         sll = SyncLocalToLocal(m_orig, m_after, enable_delete=True)
         sll.sync()
+        self._assert_counters(sll, xfer=2, xfer_metadata=2+3, rm=1)
 
         m_orig = Manifest.for_path(self.test_dir)
         m_restored = Manifest.for_path(tgt_dir)
@@ -191,6 +203,7 @@ class TestSyncLocalToLocal(BaycatTestCase):
         m2 = Manifest.for_path(tgt_dir)
         sll = SyncLocalToLocal(m1, m2, dry_run=True)
         sll.sync()
+        self._assert_counters(sll)  # dry run: nothing happened
 
         m_tgt_post = Manifest.for_path(tgt_dir)
         self.assertEqual(m_tgt_orig, m_tgt_post)
@@ -206,6 +219,7 @@ class TestSyncLocalToLocal(BaycatTestCase):
         m2 = Manifest.for_path(self.test_dir)
         sll = SyncLocalToLocal(m1, m2, dry_run=True)
         sll.sync()
+        self._assert_counters(sll, delete_skipped=9)  # dry run, ignore non-actions
 
         m_test_post = Manifest.for_path(self.test_dir)
         self.assertEqual(m_test_orig, m_test_orig)
@@ -221,6 +235,7 @@ class TestSyncLocalToLocal(BaycatTestCase):
         m2 = Manifest.for_path(self.test_dir)
         sll = SyncLocalToLocal(m1, m2, dry_run=True, enable_delete=True)
         sll.sync()
+        self._assert_counters(sll, delete_skipped=9)
 
         m_test_post = Manifest.for_path(self.test_dir)
         self.assertEqual(m_test_orig, m_test_orig)
