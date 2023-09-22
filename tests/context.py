@@ -1,5 +1,6 @@
 import datetime
 from io import BytesIO
+import logging
 import os
 import shutil
 import sys
@@ -8,8 +9,6 @@ import unittest
 
 import boto3
 from moto import mock_s3
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
 import baycat
 from baycat.local_file import LocalFile
@@ -86,6 +85,10 @@ class BaycatTestCase(unittest.TestCase):
         '''Creates a temporary test directory, and populates it with the
         directories and files as expected.
         '''
+
+        # Let's turn off logging during tests...
+        logging.disable(logging.CRITICAL)
+
         self.base_dir = tempfile.mkdtemp(prefix="baycat_unit_test-")
 
         self.test_dir = self._build_dirs("0", self.LEAF_DIRS, self.FILECONTENTS)
