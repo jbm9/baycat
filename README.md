@@ -37,6 +37,32 @@ TODO.
 
 # Random notes
 
+## Development setup
+
+baycat includes a `Makefile` to simplify working on it.  To set up a
+dev environment, you can just do `make init` in the baycat directory.
+This will set up a virtual environment with all the dependencies
+needed for both running and testing baycat.  It also installs baycat
+in the "editable" state in that venv.  This means you can edit the
+library files and test things out without needing to reinstall the
+package after every edit.
+
+To use the virtual environment, you just need to run `source
+.venv/bin/activate` in your shell to load it up.  To exit the virtual
+environment, you just run `deactivate`.  (This works on bash;
+virtualenv supports other shells via their own activate files in
+`.venv/bin`.)
+
+To run unit tests, use `make test` or `make coverage`.  The coverage
+output will be in `htmlcov/index.html`.
+
+Finally, to find egregiously unpythonic file layouts, use `make
+pycodestyle`.  Note that there are plenty of things it gets annoyed
+about in the existing codebase, so the current linting guidelines are
+"Please be tidy and consistent."  We may add proper linting to the
+repo in the glorious future.
+
+
 ## Rationalization of the metadata storage
 
 baycat solves the problem of storing unix metadata differently than
