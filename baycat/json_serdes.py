@@ -32,6 +32,7 @@ class JSONSerDes:
     def from_json_obj(cls, json_obj):
         pass
 
+
 class BaycatJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, JSONSerDes):
