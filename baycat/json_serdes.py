@@ -51,8 +51,12 @@ def baycat_json_decoder(obj):
         return obj
 
     if not DECODERS:
-        for cls in JSONSerDes.__subclasses__():
-            DECODERS[cls.JSON_CLASSNAME] = cls.from_json_obj
+        def _rec_add(cls_head):
+            logging.debug('Registered JSON loader "%s" to %s' % (cls_head.JSON_CLASSNAME, cls_head))
+            DECODERS[cls_head.JSON_CLASSNAME] = cls_head.from_json_obj
+            for cls in cls_head.__subclasses__():
+                _rec_add(cls)
+        _rec_add(JSONSerDes)
 
     if clsname not in DECODERS:
         # XXX TODO Add test coverage for this branch
