@@ -11,7 +11,7 @@ from moto import mock_s3
 
 from context import baycat, BaycatTestCase
 
-from baycat.s3_manifest import S3Manifest, ClientError
+from baycat.s3_manifest import S3Manifest, ClientError, S3MANIFEST_FILENAME
 
 
 class TestS3Manifest(BaycatTestCase):
@@ -53,3 +53,15 @@ class TestS3Manifest(BaycatTestCase):
 
         m = S3Manifest.from_bucket(nonempty_bucket, "/")
         self.assertEqual(len(m.entries), N)
+
+    def test_load__exceptions(self):
+        self.assertRaises(ClientError, lambda: S3Manifest.load('nonbucket', '/foo'))
+
+    def test_save_and_load(self):
+        m = S3Manifest.from_bucket(self.BUCKET_NAME, self.S3_PATH)
+
+        m.save()
+
+        m_got = S3Manifest.load(self.BUCKET_NAME, self.S3_PATH)
+
+        self.assertEqual(m, m_got)

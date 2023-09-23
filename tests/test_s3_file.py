@@ -19,6 +19,10 @@ class TestS3File(BaycatTestCase):
         s = str(s3f)
         self.assertTrue(True)
 
+    def test_classname(self):
+        s3f = self._get_s3f()
+        self.assertEqual(s3f._json_classname, "S3File")
+
     def test_copy(self):
         s3f = self._get_s3f()
         s3f_copy = s3f.copy()

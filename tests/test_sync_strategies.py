@@ -16,7 +16,7 @@ from baycat.manifest import Manifest
 from baycat.local_file import LocalFile, ReservedNameException
 from baycat.json_serdes import BaycatJSONEncoder, baycat_json_decoder
 from baycat.s3_manifest import S3Manifest
-from baycat.sync_strategies import SyncLocalToLocal, SyncLocalToS3
+from baycat.sync_strategies import SyncLocalToLocal, SyncLocalToS3, SyncS3ToLocal
 
 
 class TestSyncLocalToLocal(BaycatTestCase):
@@ -133,7 +133,7 @@ class TestSyncLocalToLocal(BaycatTestCase):
         # Now apply the diff and ensure it restores state
         sll = SyncLocalToLocal(m_orig, m_after)
         sll.sync()
-        self._assert_counters(sll, xfer=2, xfer_metadata=2+3, delete_skipped=1)
+        self._assert_counters(sll, xfer=2, xfer_metadata=2+4, delete_skipped=1)
 
         m_orig = Manifest.for_path(self.test_dir)
         m_restored = Manifest.for_path(tgt_dir)
@@ -177,7 +177,7 @@ class TestSyncLocalToLocal(BaycatTestCase):
         # Now apply the diff and ensure it restores state
         sll = SyncLocalToLocal(m_orig, m_after, enable_delete=True)
         sll.sync()
-        self._assert_counters(sll, xfer=2, xfer_metadata=2+3, rm=1)
+        self._assert_counters(sll, xfer=2, xfer_metadata=2+4, rm=1)
 
         m_orig = Manifest.for_path(self.test_dir)
         m_restored = Manifest.for_path(tgt_dir)
@@ -283,7 +283,7 @@ class TestSyncLocalToS3(BaycatTestCase):
         i_mangle = 0
         p = self._ith_path(i_mangle)
         rel_p = self.FILECONTENTS[i_mangle][i_mangle]
-        s3_p = os.path.join(m_got.prefix, rel_p)
+        s3_p = os.path.join(m_got.root, rel_p)
         new_content = "changed contents"
 
         with open(p, "w") as fh:
@@ -307,3 +307,54 @@ class TestSyncLocalToS3(BaycatTestCase):
         s3.download_fileobj(dst_bucket, s3_p, result_fh)
         got_contents = result_fh.getvalue().decode("UTF8")
         self.assertEqual(got_contents, new_content)
+
+
+class TestSyncS3ToLocal(BaycatTestCase):
+    '''Strictly speaking, this is actually a round-trip test.
+    '''
+    def test__smoke_test(self):
+        logging.basicConfig(level=logging.DEBUG)
+
+        m = Manifest()
+        ps = PathSelector(self.test_dir)
+        m.add_selector(ps)
+
+        dst_bucket = "dst"
+        bucket = self._mk_bucket(dst_bucket)
+        m2 = S3Manifest.from_bucket(dst_bucket)
+
+        self.assertEqual(len(m2.entries), 0)
+
+        sls3 = SyncLocalToS3(bucket, m, m2)
+        m2p = sls3.sync()
+        m2p.save()
+
+        self.assertNotEqual(len(m2p.entries), 0)
+
+        m_got = S3Manifest.load(dst_bucket, "/")
+
+        ########################################
+        # Now sync it back down.
+
+        tgt_dir = os.path.join(self.base_dir, "1")
+        time.sleep(0.01)
+        os.makedirs(tgt_dir, exist_ok=True)
+
+        m_tgt = Manifest()
+        ps_tgt = PathSelector(tgt_dir)
+        m_tgt.add_selector(ps_tgt)
+
+        ss3l = SyncS3ToLocal(m_got, m_tgt)
+        ss3lp = ss3l.sync()
+
+        ########################################
+        # And now create a new manifest from the target dir
+        m_tgt_got = Manifest()
+        ps_tgt_got = PathSelector(tgt_dir)
+        m_tgt_got.add_selector(ps_tgt_got)
+
+        diffs = m.diff_from(m_tgt_got)
+
+        for k in ["added", "deleted", "contents", "metadata"]:
+            self.assertEqual(0, len(diffs[k]),
+                             f'{k}: {diffs[k]}')

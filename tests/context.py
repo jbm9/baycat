@@ -124,7 +124,7 @@ class BaycatTestCase(unittest.TestCase):
                 "Size": len(self.FILECONTENTS[0][1]),
                 "LastModified": datetime.datetime(2022, 3, 4),
             }
-        return S3File(root_path, objsum)
+        return S3File.from_objsum(root_path, objsum)
 
     def _ith_path(self, i, tgt_dir=None, fileset=None):
         # Get the full path to the i'th test file

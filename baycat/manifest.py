@@ -103,7 +103,7 @@ class Manifest(JSONSerDes):
                 raise DifferentRootPathException(errstr)
 
         for lf in sel.walk():
-            logging.debug(f'Manifest add {lf.path}')
+            logging.debug(f'Manifest add {lf.rel_path}')
             self.entries[lf.rel_path] = lf
 
         # We do checksums in bulk after walking the filesystem.  This
@@ -163,8 +163,9 @@ class Manifest(JSONSerDes):
         return result
 
     def __eq__(self, m_b):
-        if self.__class__ != m_b.__class__:
-            return False
+        cands = [self.__class__, super(self.__class__, self)] + self.__class__.__subclasses__()
+        if m_b.__class__ not in cands:
+            return NotImplemented
 
         # self.path is not checked here, as we can store the same
         # manifest in multiple locations.
@@ -295,14 +296,18 @@ class Manifest(JSONSerDes):
 
         return result
 
+    def mark_transferred(self, rel_path, src_f):
+        if rel_path in self.entries:
+            self.entries[rel_path].mark_contents_transferred(src_f)
+            return
+
+        self.entries[rel_path] = src_f.copy()
+
     def mark_deleted(self, rel_path):
         del self.entries[rel_path]
 
-    def mark_mkdir(self, rel_p):
-        dpath = rel_p
-        abspath = self._expand_path(rel_p)
-        # Just make a new entry, this is cheap on local FS
-        self.entries[dpath] = LocalFile.for_abspath(self.root, abspath)
+    def mark_mkdir(self, rel_p, src_f):
+        self.mark_transferred(rel_p, src_f)
 
     def update(self, force_checksum=False):
         '''Update this manifest with current FS state as efficiently as possible

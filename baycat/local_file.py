@@ -205,8 +205,9 @@ class LocalFile(JSONSerDes):
         return result
 
     def __eq__(self, b):
-        if self.__class__ != b.__class__:
-            return False
+        cands = [self.__class__, super(self.__class__, self)] + self.__class__.__subclasses__()
+        if b.__class__ not in cands:
+            return NotImplemented
 
         my_fields = self.to_json_obj()
         b_fields = b.to_json_obj()
@@ -218,6 +219,9 @@ class LocalFile(JSONSerDes):
                 if k in ["metadata", "atime_ns", "collected", "root_path", "path"]:
                     continue
                 if a.get(k, None) != b.get(k, None):
+                    if k == '_json_classname':
+                        # We need to figure out subclassing in our name conventions.
+                        continue
                     return False
 
             return True

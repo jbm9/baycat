@@ -51,6 +51,7 @@ class SyncStrategy(ABC):
             if not lf.is_dir:
                 continue
             self.mkdir(rel_p)
+            self.manifest_xfer.mark_transferred(rel_p, lf)
 
             # Add the dir to the list of "files" touched
             paths_touched.append(rel_p)
@@ -65,6 +66,7 @@ class SyncStrategy(ABC):
                 continue
 
             self.transfer_file(rel_p)
+            self.transfer_metadata(rel_p)
             paths_touched.append(rel_p)
 
         for rel_p in self.diff_state["contents"]:
@@ -94,21 +96,22 @@ class SyncStrategy(ABC):
         # And finally play back all the metadata, in order of
         # decreasing depth.
         for _, d in sorted(list(dir_fixups)):
-            self.transfer_metadata(d)
+            if d not in self.diff_state["deleted"]:
+                self.transfer_metadata(d)
 
         return self.manifest_xfer
 
     def rm_file(self, rel_p):
         '''rel_p the relative path to the file to delete from dst, if allowed'''
-        if not self.enable_delete:
+        logging.debug('%s.rm_file(%s)' % (type(self).__name__, rel_p))
+        if self.enable_delete:
+            self._counters["rm"] += 1
+            self._rm_file(rel_p)
+        else:
             self._counters["delete_skipped"] += 1
 
             if self.dry_run:
                 logging.info(f"dry_run: remove {rel_p}")
-            return
-        else:
-            self._counters["rm"] += 1
-            self._rm_file(rel_p)
 
         self.manifest_xfer.mark_deleted(rel_p)
 
@@ -117,54 +120,53 @@ class SyncStrategy(ABC):
         '''rel_p the relative path to the file to delete from dst, if allowed'''
 
     def transfer_file(self, rel_p):
+        logging.debug('%s.transfer_file(%s)' % (str(type(self).__name__), rel_p))
         dst_path = self.manifest_dst._expand_path(rel_p)
         src_path = self.manifest_src._expand_path(rel_p)
 
         src_lf = self.manifest_src.entries[rel_p]
-        if src_lf.is_dir:
-            return
-        if self.dry_run:
+        if not src_lf.is_dir and not self.dry_run:
+            self._counters["xfer"] += 1
+            self._transfer_file(rel_p)
+        elif self.dry_run:
             logging.info(f"dry_run: transfer {src_path} -> {dst_path}")
-            return
 
-        self._counters["xfer"] += 1
-        self._transfer_file(rel_p)
-
-        if rel_p in self.manifest_dst.entries:
-            self.manifest_xfer.entries[rel_p].mark_contents_transferred(src_lf)
-        else:
-            self.manifest_xfer.entries[rel_p] = src_lf.copy()
+        self.manifest_xfer.mark_transferred(rel_p, src_lf)
 
     @abstractmethod
     def _transfer_file(self, rel_p):
         '''Copy file from the src to the dst'''
 
     def transfer_metadata(self, rel_p):
+        logging.debug('%s.transfer_metadata (%s)' % (type(self).__name__, rel_p))
         dst_path = self.manifest_dst._expand_path(rel_p)
         src_path = self.manifest_src._expand_path(rel_p)
 
-        if self.dry_run:
+        if not self.dry_run:
+            self._counters["xfer_metadata"] += 1
+            self._transfer_metadata(rel_p)
+        else:
             logging.info(f"dry_run: transfer metadata {src_path} -> {dst_path}")
-            return
 
-        self._counters["xfer_metadata"] += 1
-        self._transfer_metadata(rel_p)
+        src_lf = self.manifest_src.entries[rel_p]
+        self.manifest_xfer.mark_transferred(rel_p, src_lf)
 
     @abstractmethod
     def _transfer_metadata(self, rel_p):
         '''Copy metadata from src to dst for file at relative path rel_p'''
 
     def mkdir(self, rel_p):
+        logging.debug('%s.mkdir (%s)' % (type(self).__name__, rel_p))
         dst_path = self.manifest_dst._expand_path(rel_p)
 
-        if self.dry_run:
+        if not self.dry_run:
+            self._counters["mkdir"] += 1
+            self._mkdir(rel_p)
+        else:
             logging.info(f"dry_run: make directory (recursive) {dst_path}")
-            return
 
-        self._counters["mkdir"] += 1
-        self._mkdir(rel_p)
-
-        self.manifest_xfer.mark_mkdir(rel_p)
+        src_f = self.manifest_src.entries[rel_p]
+        self.manifest_xfer.mark_mkdir(rel_p, src_f)
 
     @abstractmethod
     def _mkdir(self, rel_p):
@@ -172,7 +174,6 @@ class SyncStrategy(ABC):
 
 
 class SyncLocalToLocal(SyncStrategy):
-
     def _rm_file(self, rel_p):
         '''rel_p the relative path to the file to delete from dst, if allowed'''
         dst_path = self.manifest_dst._expand_path(rel_p)
@@ -190,7 +191,6 @@ class SyncLocalToLocal(SyncStrategy):
         dst_path = self.manifest_dst._expand_path(rel_p)
         src_path = self.manifest_src._expand_path(rel_p)
 
-        src_lf = self.manifest_src.entries[rel_p]
         logging.debug(f'cp {src_path} {dst_path}')
 
         # Make a temporary path, which we own
@@ -200,7 +200,6 @@ class SyncLocalToLocal(SyncStrategy):
         shutil.copy(src_path, dst_temp)
 
         os.rename(dst_temp, dst_path)
-        os.utime(dst_path, ns=src_lf.get_utime())
 
     def _transfer_metadata(self, rel_p):
         '''Copy metadata from src to dst for file at relative path rel_p'''
@@ -233,7 +232,8 @@ class SyncLocalToS3(SyncStrategy):
     def _mkdir(self, rel_p):
         '''Create an empty directory
 
-        Note that this is a non-sensical thing in S3, so it's a noop.
+        Note that this is non-sensical in S3, so we don't actually do
+        anything here.
         '''
         return
 
@@ -258,4 +258,40 @@ class SyncLocalToS3(SyncStrategy):
         We store all metadata for S3 hosted files in the manifest file
         itself, so this merely transfers from one manifest to the other.
         '''
-        return
+        src_f = self.manifest_src.entries[rel_p]
+
+        self.manifest_xfer.mark_transferred(rel_p, src_f)
+
+
+class SyncS3ToLocal(SyncLocalToLocal):
+    def _transfer_file(self, rel_p):
+        '''Copy file from the src to the dst'''
+        dst_path = self.manifest_dst._expand_path(rel_p)
+        src_path = self.manifest_src._expand_path(rel_p)
+
+        # Make a temporary path, which we own
+        fd, dst_temp = tempfile.mkstemp(prefix=dst_path, dir="/")
+        os.close(fd)  # how delightfully retro feeling
+
+        try:
+            response = self.manifest_src.download_file(src_path, dst_temp)
+        except ClientError as e:
+            logging.error(f'Download of "{rel_p}" failed: {e}')
+            return
+
+        os.rename(dst_temp, dst_path)
+
+    def _transfer_metadata(self, rel_p):
+        '''Copy metadata from src to dst for file at relative path rel_p'''
+        dst_path = self.manifest_dst._expand_path(rel_p)
+        src_path = self.manifest_src._expand_path(rel_p)
+
+        logging.debug(f'metadata copy {src_path} {dst_path}')
+
+        src_f = self.manifest_src.entries[rel_p]
+        dst_f = self.manifest_xfer.entries[rel_p]
+
+        os.chown(dst_path, src_f.metadata["uid"], src_f.metadata["gid"])
+        os.chmod(dst_path, src_f.metadata["mode"])
+        os.utime(dst_path, ns=src_f.get_utime())
+        dst_f.mark_metadata_transferred(src_f)
