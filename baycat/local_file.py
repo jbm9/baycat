@@ -30,6 +30,8 @@ class LocalFile(JSONSerDes):
     '''
     JSON_CLASSNAME = "LocalFile"
 
+    TIME_RESOLUTION_NS = 1
+
     def __init__(self, root_path, rel_path, statinfo, cksum=None, cksum_type="MD5", is_dir=False):
         self._json_classname = self.JSON_CLASSNAME
         self.root_path = root_path
@@ -83,7 +85,7 @@ class LocalFile(JSONSerDes):
         result["_recomputed_cksum"] = False
 
         result["size"] = self.size != old_state.size
-        result["mtime_ns"] = self.mtime_ns != old_state.mtime_ns
+        result["mtime_ns"] = abs(self.mtime_ns - old_state.mtime_ns) > self.TIME_RESOLUTION_NS-1
 
         if not compare_checksums:
             result["cksum"] = None
