@@ -54,13 +54,25 @@ virtualenv supports other shells via their own activate files in
 `.venv/bin`.)
 
 To run unit tests, use `make test` or `make coverage`.  The coverage
-output will be in `htmlcov/index.html`.
+output will be in `htmlcov/index.html`.  This turns off all logging by
+default, but the `BAYCAT_TEST_LOGLEVEL` environment variable can be
+used to pass in a string for the logging library.  You will most
+typically want to use this like
+
+```
+BAYCAT_TEST_LOGLEVEL=debug python3 -m unittest discover -s tests/ -k
+TestS3Man
+```
+
+This will run all tests matching the pattern `TestS3Man` with logging
+at full-on debug.
 
 Finally, to find egregiously unpythonic file layouts, use `make
 pycodestyle`.  Note that there are plenty of things it gets annoyed
 about in the existing codebase, so the current linting guidelines are
 "Please be tidy and consistent."  We may add proper linting to the
 repo in the glorious future.
+
 
 
 ## Rationalization of the metadata storage

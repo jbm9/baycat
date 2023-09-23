@@ -86,8 +86,17 @@ class BaycatTestCase(unittest.TestCase):
         directories and files as expected.
         '''
 
-        # Let's turn off logging during tests...
-        logging.disable(logging.CRITICAL)
+        if 'BAYCAT_TEST_LOGLEVEL' in os.environ:
+            log_level = os.environ['BAYCAT_TEST_LOGLEVEL']
+            logging.basicConfig(level=log_level.upper())
+        else:
+            # Let's turn off logging during tests by default...
+            logging.disable(logging.CRITICAL)
+
+        # The following are Chatty Cathies.
+        logging.getLogger("botocore").setLevel(logging.WARNING)
+        logging.getLogger("s3transfer").setLevel(logging.WARNING)
+        logging.getLogger("boto3").setLevel(logging.WARNING)
 
         self.base_dir = tempfile.mkdtemp(prefix="baycat_unit_test-")
 
