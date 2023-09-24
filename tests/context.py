@@ -14,6 +14,10 @@ import baycat
 from baycat.local_file import LocalFile
 from baycat.s3_file import S3File
 
+from baycat.manifest import Manifest
+from baycat.s3_manifest import S3Manifest
+from baycat.file_selectors import PathSelector
+
 
 class BaycatTestCase(unittest.TestCase):
     '''Base class for all baycat test cases
@@ -133,3 +137,25 @@ class BaycatTestCase(unittest.TestCase):
         fileset = fileset or self.FILECONTENTS
 
         return os.path.join(tgt_dir, fileset[i][0])
+
+    def _get_test_manifest(self):
+        return Manifest.for_path(self.test_dir)
+
+    def assertEquivalentDirs(self, p1, p2):
+        '''Assert that p1 and p2 result in equal manifests'''
+        m1 = Manifest.for_path(p1)
+        m2 = Manifest.for_path(p2)
+
+        diffs = m1.diff_from(m2)
+
+        for k in ["added", "deleted", "contents", "metadata"]:
+            self.assertEqual(0, len(diffs[k]),
+                             f'{k}: {diffs[k]}')
+
+    def _assert_counters(self, sll, **kwargs):
+        for k,v in kwargs.items():
+            msg = f'Mismatch for counter {k}: {sll._counters} / {kwargs}'
+            self.assertEqual(v, sll._counters[k], msg)
+
+        for k in sll._counters.keys():
+            self.assertTrue(k in kwargs, f'Found {k} in counters: {sll._counters}')

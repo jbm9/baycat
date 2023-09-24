@@ -20,14 +20,6 @@ from baycat.sync_strategies import SyncLocalToLocal, SyncLocalToS3, SyncS3ToLoca
 
 
 class TestSyncLocalToLocal(BaycatTestCase):
-    def _assert_counters(self, sll, **kwargs):
-        for k,v in kwargs.items():
-            msg = f'Mismatch for counter {k}: {sll._counters} / {kwargs}'
-            self.assertEqual(v, sll._counters[k], msg)
-
-        for k in sll._counters.keys():
-            self.assertTrue(k in kwargs, f'Found {k} in counters: {sll._counters}')
-
     def _copy_test_dir_via_sll(self):
         m = Manifest()
         ps = PathSelector(self.test_dir)
@@ -46,24 +38,13 @@ class TestSyncLocalToLocal(BaycatTestCase):
         sll.sync()
         return tgt_dir
 
-    def assertEquivalentManifests(self, p1, p2):
-        '''Assert that p1 and p2 result in equal manifests'''
-        m1 = Manifest.for_path(p1)
-        m2 = Manifest.for_path(p2)
-
-        diffs = m1.diff_from(m2)
-
-        for k in ["added", "deleted", "contents", "metadata"]:
-            self.assertEqual(0, len(diffs[k]),
-                             f'{k}: {diffs[k]}')
-
     def test_full_copy(self):
         tgt_dir = self._copy_test_dir_via_sll()
-        self.assertEquivalentManifests(self.test_dir, tgt_dir)
+        self.assertEquivalentDirs(self.test_dir, tgt_dir)
 
     def test_noop(self):
         tgt_dir = self._copy_test_dir_via_sll()
-        self.assertEquivalentManifests(self.test_dir, tgt_dir)
+        self.assertEquivalentDirs(self.test_dir, tgt_dir)
 
         m1 = Manifest.for_path(self.test_dir)
         m2 = Manifest.for_path(tgt_dir)
@@ -73,7 +54,7 @@ class TestSyncLocalToLocal(BaycatTestCase):
         self._assert_counters(sll)  # shouldn't be anything here.
 
         self.assertEqual(m1, m_got)
-        self.assertEquivalentManifests(self.test_dir, tgt_dir)
+        self.assertEquivalentDirs(self.test_dir, tgt_dir)
 
     def _mangle_target_dir(self, tgt_dir):
         ##############################
@@ -111,7 +92,7 @@ class TestSyncLocalToLocal(BaycatTestCase):
         # to it.
 
         tgt_dir = self._copy_test_dir_via_sll()
-        self.assertEquivalentManifests(self.test_dir, tgt_dir)
+        self.assertEquivalentDirs(self.test_dir, tgt_dir)
 
         # And then change stuff
         expected_n = self._mangle_target_dir(tgt_dir)
@@ -155,7 +136,7 @@ class TestSyncLocalToLocal(BaycatTestCase):
         # to it.
 
         tgt_dir = self._copy_test_dir_via_sll()
-        self.assertEquivalentManifests(self.test_dir, tgt_dir)
+        self.assertEquivalentDirs(self.test_dir, tgt_dir)
 
         # And then change stuff
         expected_n = self._mangle_target_dir(tgt_dir)
@@ -252,7 +233,7 @@ class TestSyncLocalToS3(BaycatTestCase):
         m2 = S3Manifest.from_bucket(dst_bucket)
         self.assertEqual(len(m2.entries), 0)
 
-        sls3 = SyncLocalToS3(bucket, m, m2)
+        sls3 = SyncLocalToS3(m, m2)
 
         sls3.sync()
 
@@ -272,7 +253,7 @@ class TestSyncLocalToS3(BaycatTestCase):
         self.assertNotEqual(len(orig_files), len(new_files))
         self.assertNotEqual(len(m_got.entries), len(new_files))
 
-        sls3_new = SyncLocalToS3(bucket, m_new, m_got)
+        sls3_new = SyncLocalToS3(m_new, m_got)
         sls3_new.sync()
 
         m_got_new = S3Manifest.from_bucket(dst_bucket)
@@ -296,7 +277,7 @@ class TestSyncLocalToS3(BaycatTestCase):
         mangled_files = [ lf for lf in m_mangled.entries.values() if not lf.is_dir ]
         self.assertEqual(len(mangled_files), len(new_files))
 
-        sls3_mangled = SyncLocalToS3(bucket, m_mangled, m_got)
+        sls3_mangled = SyncLocalToS3(m_mangled, m_got)
         sls3_mangled.sync()
 
         m_got_mangled = S3Manifest.from_bucket(dst_bucket)
@@ -325,7 +306,7 @@ class TestSyncS3ToLocal(BaycatTestCase):
 
         self.assertEqual(len(m2.entries), 0)
 
-        sls3 = SyncLocalToS3(bucket, m, m2)
+        sls3 = SyncLocalToS3(m, m2)
         m2p = sls3.sync()
         m2p.save()
 
