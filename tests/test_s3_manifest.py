@@ -65,3 +65,14 @@ class TestS3Manifest(BaycatTestCase):
         m_got = S3Manifest.load(self.BUCKET_NAME, self.S3_PATH)
 
         self.assertEqual(m, m_got)
+
+    def test_save__overwrite(self):
+        m = S3Manifest.from_bucket(self.BUCKET_NAME, self.S3_PATH)
+        self.assertRaises(ValueError, lambda: m.save(overwrite=False))
+
+    def test_from_json_obj__bogons(self):
+        self.assertRaises(ValueError, lambda: S3Manifest.from_json_obj({}))
+        m = S3Manifest.from_bucket(self.BUCKET_NAME, self.S3_PATH)
+
+        s3f = m.entries[self.FILECONTENTS[0][0]]
+        self.assertRaises(ValueError, lambda: S3Manifest.from_json_obj(s3f.to_json_obj()))

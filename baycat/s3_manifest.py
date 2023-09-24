@@ -96,8 +96,7 @@ class S3Manifest(Manifest):
         result = S3Manifest(bucket_name=obj["bucket_name"], root=obj["root"])
         result.entries = obj["entries"]
         for k, v in result.entries.items():
-            if v.__class__ == dict:
-                result.entries[k] = baycat_json_decoder(v)
+            result.entries[k] = baycat_json_decoder(v)
         return result
 
     def _add_entry(self, objsum):
