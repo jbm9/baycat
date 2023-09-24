@@ -70,6 +70,7 @@ class Manifest(JSONSerDes):
         self.root = root
         self.poolsize = poolsize
         self.entries = {}  # path => LocalFile
+        self.selectors = []
 
     def add_selector(self, sel, do_checksum=False):
         '''Add from the file_selector interface selector given
@@ -97,14 +98,19 @@ class Manifest(JSONSerDes):
 
         if self.root is None:
             self.root = sel.rootpath
-        else:
-            if self.root != sel.rootpath:
-                errstr = f"Manifest at {self.root}, path selector at {sel.rootpath}"
-                raise DifferentRootPathException(errstr)
+        elif self.root != sel.rootpath:
+            errstr = f"Manifest at {self.root}, path selector at {sel.rootpath}"
+            raise DifferentRootPathException(errstr)
 
-        for lf in sel.walk():
-            logging.debug(f'Manifest add {lf.rel_path}')
-            self.entries[lf.rel_path] = lf
+        self.selectors.append(sel)
+        self.run_selectors(do_checksum)
+
+    def run_selectors(self, do_checksum):
+        for sel in self.selectors:
+            logging.debug('Manifest run selector %s' % (sel,))
+            for lf in sel.walk():
+                logging.debug(f'Manifest {sel.__class__.__name__} add {lf.rel_path}')
+                self.entries[lf.rel_path] = lf
 
         # We do checksums in bulk after walking the filesystem.  This
         # is suboptimal on very large collections, but the code gets
@@ -156,9 +162,10 @@ class Manifest(JSONSerDes):
             json.dump(self, f, default=BaycatJSONEncoder().default)
 
     @classmethod
-    def load(self, path):
+    def load(cls, path):
         with open(path, "r") as f:
-            result = json.load(f, object_hook=baycat_json_decoder)
+            d = json.load(f)
+            return cls.from_json_obj(d)
 
         return result
 
@@ -195,11 +202,15 @@ class Manifest(JSONSerDes):
             "path": self.path,
             "root": self.root,
             # poolsize is skipped
-            "entries": {}
+            "entries": {},
+            "selectors": [],
         }
 
         for p, lf in self.entries.items():
             result["entries"][p] = lf.to_json_obj()
+
+        for sel in self.selectors:
+            result["selectors"].append(sel.to_json_obj())
 
         return result
 
@@ -218,6 +229,9 @@ class Manifest(JSONSerDes):
         for k, v in result.entries.items():
             if v.__class__ == dict:
                 result.entries[k] = baycat_json_decoder(v)
+
+        result.selectors = list(map(baycat_json_decoder, obj["selectors"]))
+
         return result
 
     def diff_from(self, old_manifest):
@@ -321,7 +335,14 @@ class Manifest(JSONSerDes):
         anything which has metadata changes, and will be recomputed as
         needed for transfers.
         '''
-        m_minimal = Manifest.for_path(self.root, do_checksum=False)
+#        m_minimal = Manifest.for_path(self.root, do_checksum=False)
+        m_minimal = Manifest(path=None, root=self.root, poolsize=self.poolsize)
+        if not self.selectors:
+            raise ValueError("update called without selectors")
+
+        for sel in self.selectors:
+            m_minimal.add_selector(sel)
+        m_minimal.run_selectors(do_checksum=False)
 
         new_keys = set(m_minimal.entries.keys())
         old_keys = set(self.entries.keys())

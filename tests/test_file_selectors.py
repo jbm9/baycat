@@ -31,6 +31,25 @@ class TestFileSelectors(BaycatTestCase):
 
         self.assertEqual(sorted(got_paths), sorted(expected_paths))
 
+    def test_eq(self):
+        ps = PathSelector(self.test_dir)
+        ps2 = PathSelector(self.test_dir)
+        ps3 = PathSelector("/etc/")
+
+        self.assertEqual(ps, ps)
+        self.assertEqual(ps, ps2)
+        self.assertEqual(ps2, ps)
+
+        self.assertNotEqual(ps, ps3)
+        self.assertNotEqual(ps3, ps)
+
+    def test_json_round_trip(self):
+        ps = PathSelector(self.test_dir)
+
+        ps2 = ps.copy()
+
+        self.assertEqual(ps, ps2)
+
     def test_walk__reservedname(self):
         with open(os.path.join(self.test_dir, "a/b/.baycat_dir_metadata"), "w+") as f:
             f.write("foo")

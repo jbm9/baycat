@@ -20,9 +20,9 @@ class TestManifest(BaycatTestCase):
         m = Manifest()
         m.add_selector(ps)
 
-        m_json = m.to_json()
+        m_json = m.to_json_obj()
 
-        m_round_trip = json.loads(m_json, object_hook=baycat_json_decoder)
+        m_round_trip = Manifest.from_json_obj(m_json)
 
         self.assertEqual(m, m_round_trip)
 
@@ -51,7 +51,6 @@ class TestManifest(BaycatTestCase):
         m.add_selector(ps)
 
         m.save()
-
         m_round_trip = Manifest.load(mpath)
 
         self.assertEqual(m, m_round_trip)
@@ -144,8 +143,11 @@ class TestManifest(BaycatTestCase):
 
         m = Manifest(path=mpath)
         m.add_selector(ps)
+        self.assertTrue(len(m.selectors))
 
         m_orig_copy = m.copy()
+
+        self.assertTrue(len(m_orig_copy.selectors))
         self.assertEqual(m, m_orig_copy)
 
         def _ith_path(i):
