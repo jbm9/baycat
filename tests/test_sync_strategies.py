@@ -21,7 +21,7 @@ from baycat.sync_strategies import SyncLocalToLocal, SyncLocalToS3, SyncS3ToLoca
 
 class TestSyncLocalToLocal(BaycatTestCase):
     def _copy_test_dir_via_sll(self):
-        m = Manifest()
+        m = Manifest(path="_")
         ps = PathSelector(self.test_dir)
         m.add_selector(ps)
 
@@ -29,7 +29,7 @@ class TestSyncLocalToLocal(BaycatTestCase):
         time.sleep(0.01)
         os.makedirs(tgt_dir, exist_ok=True)
 
-        m2 = Manifest()
+        m2 = Manifest(path="_")
         ps2 = PathSelector(tgt_dir)
         m2.add_selector(ps2)
 
@@ -224,7 +224,7 @@ class TestSyncLocalToLocal(BaycatTestCase):
 
 class TestSyncLocalToS3(BaycatTestCase):
     def test__smoke_test(self):
-        m = Manifest()
+        m = Manifest(path="_")
         ps = PathSelector(self.test_dir)
         m.add_selector(ps)
 
@@ -245,7 +245,7 @@ class TestSyncLocalToS3(BaycatTestCase):
         # Now we add some files locally and try it again.
 
         self._build_dirs("0", ["z"], [("z/zfile", "whee", "eaaff0f66f4f3bc0a1acc9820b3666de")])
-        m_new = Manifest()
+        m_new = Manifest(path="_")
         ps = PathSelector(self.test_dir)
         m_new.add_selector(ps)
 
@@ -270,7 +270,7 @@ class TestSyncLocalToS3(BaycatTestCase):
         with open(p, "w") as fh:
             fh.write(new_content)
 
-        m_mangled = Manifest()
+        m_mangled = Manifest(path="_")
         ps = PathSelector(self.test_dir)
         m_mangled.add_selector(ps)
 
@@ -296,7 +296,7 @@ class TestSyncS3ToLocal(BaycatTestCase):
     def test__smoke_test(self):
         logging.basicConfig(level=logging.DEBUG)
 
-        m = Manifest()
+        m = Manifest(path="_")
         ps = PathSelector(self.test_dir)
         m.add_selector(ps)
 
@@ -321,7 +321,7 @@ class TestSyncS3ToLocal(BaycatTestCase):
         time.sleep(0.01)
         os.makedirs(tgt_dir, exist_ok=True)
 
-        m_tgt = Manifest()
+        m_tgt = Manifest(path="_")
         ps_tgt = PathSelector(tgt_dir)
         m_tgt.add_selector(ps_tgt)
 
@@ -330,7 +330,7 @@ class TestSyncS3ToLocal(BaycatTestCase):
 
         ########################################
         # And now create a new manifest from the target dir
-        m_tgt_got = Manifest()
+        m_tgt_got = Manifest(path="_")
         ps_tgt_got = PathSelector(tgt_dir)
         m_tgt_got.add_selector(ps_tgt_got)
 

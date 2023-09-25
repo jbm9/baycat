@@ -70,6 +70,28 @@ class S3Manifest(Manifest):
         result = cls.from_json_obj(json.loads(fh.getvalue().decode('utf8')))
         return result
 
+    def update(self):
+        '''Note that we lose a bunch of metadata in S3, so update is half-meaningless.
+
+        However, it does let us find any file contents were are
+        already in the target location on S3.  This allows us to
+        "adopt" existing uploads from other tooling, as well as
+        recover from partial uploads that failed to update the s3
+        manifest file.
+        '''
+        response = self._fetch_objs(self.bucket_name, self.root)
+
+        if response['KeyCount'] == 0:
+            return
+
+        for objsum in response['Contents']:
+            self._add_entry(objsum)
+
+        while response['IsTruncated']:
+            response = cls._fetch_objs(bucket_name, root, response['NextContinuationToken'])
+            for objsum in response['Contents']:
+                self._add_entry(objsum)
+
     def to_json_obj(self):
         result = {
             "_json_classname": self.JSON_CLASSNAME,
@@ -102,6 +124,13 @@ class S3Manifest(Manifest):
     def _add_entry(self, objsum):
         s3f = S3File.from_objsum(self.root_path, objsum)
         dpath = s3f.rel_path
+
+        filename = os.path.basename(dpath)
+        filedir = os.path.dirname(dpath)
+        if filedir == self.root and filename == S3MANIFEST_FILENAME:
+            logging.debug('Skipping _add_entry for "%s", as it looks like my manifest' % objsum["Key"])
+            return
+
         self.entries[dpath] = s3f
 
     @classmethod
@@ -123,18 +152,6 @@ class S3Manifest(Manifest):
     @classmethod
     def from_bucket(cls, bucket_name, root="/"):
         result = S3Manifest(bucket_name=bucket_name, root=root)
-
-        response = cls._fetch_objs(bucket_name, root)
-
-        if response['KeyCount'] == 0:
-            return result
-
-        for objsum in response['Contents']:
-            result._add_entry(objsum)
-
-        while response['IsTruncated']:
-            response = cls._fetch_objs(bucket_name, root, response['NextContinuationToken'])
-            for objsum in response['Contents']:
-                result._add_entry(objsum)
+        result.update()
 
         return result

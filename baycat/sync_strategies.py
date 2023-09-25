@@ -16,6 +16,7 @@ class SyncStrategy(ABC):
         self.manifest_src = manifest_src
         self.manifest_dst = manifest_dst
         self.manifest_xfer = manifest_dst.copy()
+        logging.debug(f'Sync: "{manifest_src.root}" -> "{manifest_dst.root}"')
 
         self.enable_delete = enable_delete
         self.dry_run = dry_run
@@ -106,7 +107,11 @@ class SyncStrategy(ABC):
         logging.debug('%s.rm_file(%s)' % (type(self).__name__, rel_p))
         if self.enable_delete:
             self._counters["rm"] += 1
-            self._rm_file(rel_p)
+            try:
+                self._rm_file(rel_p)
+            except Execption as e:
+                logging.error(f'Error while deleting {rel_p}: {e}')
+                return
         else:
             self._counters["delete_skipped"] += 1
 
@@ -127,7 +132,12 @@ class SyncStrategy(ABC):
         src_lf = self.manifest_src.entries[rel_p]
         if not src_lf.is_dir and not self.dry_run:
             self._counters["xfer"] += 1
-            self._transfer_file(rel_p)
+            try:
+                self._transfer_file(rel_p)
+            except Exception as e:
+                logging.error(f'Error while transferring {rel_p}: {e}')
+                # Don't mark as transferred, because it wasn't.
+                return
         elif self.dry_run:
             logging.info(f"dry_run: transfer {src_path} -> {dst_path}")
 
@@ -144,7 +154,11 @@ class SyncStrategy(ABC):
 
         if not self.dry_run:
             self._counters["xfer_metadata"] += 1
-            self._transfer_metadata(rel_p)
+            try:
+                self._transfer_metadata(rel_p)
+            except Exception as e:
+                logging.error(f'Error while transferring metadata for {rel_p}: {e}')
+                return
         else:
             logging.info(f"dry_run: transfer metadata {src_path} -> {dst_path}")
 
@@ -161,7 +175,11 @@ class SyncStrategy(ABC):
 
         if not self.dry_run:
             self._counters["mkdir"] += 1
-            self._mkdir(rel_p)
+            try:
+                self._mkdir(rel_p)
+            except Exception as e:
+                logging.error(f'Error while mkdir for {rel_p}: {e}')
+                return
         else:
             logging.info(f"dry_run: make directory (recursive) {dst_path}")
 
@@ -218,10 +236,6 @@ class SyncLocalToLocal(SyncStrategy):
 
 
 class SyncLocalToS3(SyncStrategy):
-    def __init__(self, bucket, *args, **kwargs):
-        super(SyncLocalToS3, self).__init__(*args, **kwargs)
-        self.bucket = bucket
-
     def _rm_file(self, rel_p):
         '''rel_p the relative path to the file to delete from dst, if allowed'''
         dst_path = self.manifest_dst._expand_path(rel_p)

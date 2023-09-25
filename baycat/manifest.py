@@ -55,7 +55,7 @@ def f_ck(rp_ap):
 class Manifest(JSONSerDes):
     JSON_CLASSNAME = "Manifest"
 
-    def __init__(self, path=MANIFEST_FILENAME, root=None, poolsize=None):
+    def __init__(self, path=None, root=None, poolsize=None):
         '''Create a new empty manifest
 
         * path: path to the file to save the manifest in
@@ -66,11 +66,22 @@ class Manifest(JSONSerDes):
           subprocessing
 
         '''
-        self.path = path
         self.root = root
+        if path is None and root is None:
+            raise ValueError('No path or root given, please at least lie to me')
+
+        if path is None:
+            path = os.path.join(self.root, MANIFEST_FILENAME)
+
+        self.path = path
+
+        self.abspath = os.path.abspath(path)
+
         self.poolsize = poolsize
         self.entries = {}  # path => LocalFile
         self.selectors = []
+
+        logging.debug(f'Manifest created {self} / {self.root} / {self.path}')
 
     def add_selector(self, sel, do_checksum=False):
         '''Add from the file_selector interface selector given
@@ -109,6 +120,9 @@ class Manifest(JSONSerDes):
         for sel in self.selectors:
             logging.debug('Manifest run selector %s' % (sel,))
             for lf in sel.walk():
+                if lf.path == self.abspath:
+                    logging.debug('Skipping manifest file: %s / %s' % (lf.path, self.abspath))
+                    continue
                 logging.debug(f'Manifest {sel.__class__.__name__} add {lf.rel_path}')
                 self.entries[lf.rel_path] = lf
 
@@ -137,13 +151,15 @@ class Manifest(JSONSerDes):
                 self.entries[rel_p].cksum = cksum
 
     @classmethod
-    def for_path(cls, rootpath, path=MANIFEST_FILENAME, do_checksum=False, poolsize=None):
+    def for_path(cls, rootpath, path=None, do_checksum=False, poolsize=None):
         '''Generate an empty manifest, then populate it with a PathSelector
 
         See the constructor and add_selector() for the parameters for this function.
         '''
         ps = PathSelector(rootpath)
-        result = Manifest(path=path, poolsize=poolsize)
+        if path is None:
+            path = os.path.join(rootpath, MANIFEST_FILENAME)
+        result = Manifest(path=path, root=rootpath, poolsize=poolsize)
         result.add_selector(ps, do_checksum=do_checksum)
 
         return result
@@ -152,8 +168,12 @@ class Manifest(JSONSerDes):
         return os.path.join(self.root, rel_path)
 
     def save(self, path=None, overwrite=False):
+        path = path or self.path
         if path is None:
-            path = self.path
+            raise ValueError('Path must be set to save a manifest')
+        if not self.selectors:
+            raise ValueError('Selectors are required to save a manifest')
+        logging.debug(f'{self} Saving manifest to {path}')
 
         if not overwrite and os.path.exists(path):
             raise ManifestAlreadyExists(f"There is already a manifest at {path} and you didn't specify overwriting")
@@ -162,7 +182,10 @@ class Manifest(JSONSerDes):
             json.dump(self, f, default=BaycatJSONEncoder().default)
 
     @classmethod
-    def load(cls, path):
+    def load(cls, root, path=None):
+        if path is None:
+            path = os.path.join(root, MANIFEST_FILENAME)
+
         with open(path, "r") as f:
             d = json.load(f)
             return cls.from_json_obj(d)
@@ -335,8 +358,7 @@ class Manifest(JSONSerDes):
         anything which has metadata changes, and will be recomputed as
         needed for transfers.
         '''
-#        m_minimal = Manifest.for_path(self.root, do_checksum=False)
-        m_minimal = Manifest(path=None, root=self.root, poolsize=self.poolsize)
+        m_minimal = Manifest(root=self.root, poolsize=self.poolsize)
         if not self.selectors:
             raise ValueError("update called without selectors")
 

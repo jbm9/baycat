@@ -34,9 +34,8 @@ class LocalFile(JSONSerDes):
 
     def __init__(self, root_path, rel_path, statinfo, cksum=None, cksum_type="MD5", is_dir=False):
         self._json_classname = self.JSON_CLASSNAME
-        self.root_path = root_path
         self.rel_path = rel_path
-        self.path = os.path.abspath(os.path.join(self.root_path, self.rel_path))
+        self.path = os.path.abspath(os.path.join(root_path, self.rel_path))
         self.cksum = cksum
         self.cksum_type = cksum_type
         self.is_dir = is_dir

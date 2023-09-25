@@ -17,7 +17,7 @@ from baycat.json_serdes import BaycatJSONEncoder, baycat_json_decoder
 class TestManifest(BaycatTestCase):
     def test_serdes__happy_path(self):
         ps = PathSelector(self.test_dir)
-        m = Manifest()
+        m = Manifest(path="_")
         m.add_selector(ps)
 
         m_json = m.to_json_obj()
@@ -51,7 +51,7 @@ class TestManifest(BaycatTestCase):
         m.add_selector(ps)
 
         m.save()
-        m_round_trip = Manifest.load(mpath)
+        m_round_trip = Manifest.load(self.test_dir)
 
         self.assertEqual(m, m_round_trip)
 
@@ -67,7 +67,7 @@ class TestManifest(BaycatTestCase):
 
         m.save(filename, overwrite=True)
 
-        m2 = Manifest.load(filename)
+        m2 = Manifest.load(self.test_dir, filename)
         self.assertEqual(m, m2)
 
     def test_eq__bogons(self):
@@ -78,7 +78,7 @@ class TestManifest(BaycatTestCase):
         m = Manifest(path=mpath)
         m.add_selector(ps)
 
-        m2 = Manifest()
+        m2 = Manifest(path="_")
 
         self.assertNotEqual(m, 0)
         self.assertNotEqual(m, m2)
@@ -192,15 +192,15 @@ class TestManifest(BaycatTestCase):
 
         mpath = os.path.join(self.test_dir, ".baycat_manifest")
 
-        m = Manifest()
+        m = Manifest(path="_")
         m.add_selector(ps)
 
-        m2 = Manifest()
+        m2 = Manifest(path="_")
         m2.add_selector(ps)
 
         self.assertEqual(m, m2)
 
-        m2 = Manifest()
+        m2 = Manifest(path="_")
         m2.add_selector(ps)
         m2.add_selector(ps)
 
@@ -211,7 +211,7 @@ class TestManifest(BaycatTestCase):
 
         mpath = os.path.join(self.test_dir, ".baycat_manifest")
 
-        m = Manifest()
+        m = Manifest(path="_")
         m.add_selector(ps)
 
         ps2 = PathSelector(os.path.join(self.test_dir, "a"))
@@ -226,7 +226,7 @@ class TestManifest(BaycatTestCase):
         mpath = os.path.join(self.test_dir, ".baycat_manifest")
         logging.basicConfig(level=logging.DEBUG)
 
-        m = Manifest(poolsize=1)  # Keep it in the single process for test coverage
+        m = Manifest(path="_", poolsize=1)  # Keep it in the single process for test coverage
         m.add_selector(ps, do_checksum=True)
 
         n_checked = 0
@@ -242,7 +242,7 @@ class TestManifest(BaycatTestCase):
 
         mpath = os.path.join(self.test_dir, ".baycat_manifest")
 
-        m = Manifest()
+        m = Manifest(path="_")
         m.add_selector(ps, do_checksum=False)
 
         n_checked = 0
