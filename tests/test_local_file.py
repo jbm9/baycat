@@ -13,16 +13,6 @@ from baycat.json_serdes import BaycatJSONEncoder, baycat_json_decoder
 
 
 class TestLocalFile(BaycatTestCase):
-    def test__reservednameexception(self):
-        rel_path = ".baycat_dir_metadata"
-        path = os.path.join(self.test_dir, rel_path)
-        f = open(path, "w+")
-        f.write("hi moM")
-        f.close()
-
-        self.assertRaises(ReservedNameException,
-                          lambda: LocalFile.for_path(self.test_dir, rel_path))
-
     def test_str__doesnt_explode(self):
         # This is a stupid smoke test
         lf = self._get_lf()
@@ -49,6 +39,11 @@ class TestLocalFile(BaycatTestCase):
             self.assertEqual(path, lf.path, path)
             self.assertEqual(len(contents.encode("UTF-8")), lf.size, path)
             self.assertEqual(exp_hash, lf.cksum, path)
+
+    def test_for_path__dot(self):
+        lf = LocalFile.for_path(self.test_dir, ".", is_dir=True)
+        self.assertEqual(lf.path, self.test_dir)
+        self.assertTrue(lf.is_dir)
 
     def test_for_abspath(self):
         for subpath, contents, exp_hash in BaycatTestCase.FILECONTENTS:

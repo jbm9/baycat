@@ -32,10 +32,10 @@ class LocalFile(JSONSerDes):
 
     TIME_RESOLUTION_NS = 1
 
-    def __init__(self, root_path, rel_path, statinfo, cksum=None, cksum_type="MD5", is_dir=False):
+    def __init__(self, path, rel_path, statinfo, cksum=None, cksum_type="MD5", is_dir=False):
         self._json_classname = self.JSON_CLASSNAME
         self.rel_path = rel_path
-        self.path = os.path.abspath(os.path.join(root_path, self.rel_path))
+        self.path = path
         self.cksum = cksum
         self.cksum_type = cksum_type
         self.is_dir = is_dir
@@ -134,23 +134,21 @@ class LocalFile(JSONSerDes):
         is_dir: a flag for whether or not is a directory
         do_checksum: set to True to request a checksum to be computed (otherwise it's left blank)
         '''
-        path = os.path.join(root_path, rel_path)
-        sr = os.stat(path, follow_symlinks=False)
 
+        rel_path_out = rel_path
         if is_dir:
-            rel_path_out = rel_path
-            while rel_path_out.endswith("/"):
-                rel_path_out = rel_path_out[:-1]
-        else:
-            if path.endswith("/" + PATH_DUMMY_FILENAME):
-                raise ReservedNameException(f"You have a file named {PATH_DUMMY_FILENAME}, which will not be synced")
-            rel_path_out = rel_path
+            if rel_path == ".":
+                rel_path_out = ""
+
+        path = os.path.join(root_path, rel_path_out)
+        path = path.rstrip("/")
+        sr = os.stat(path, follow_symlinks=False)
 
         cksum = None
         if do_checksum and not is_dir:
             cksum = cls._md5(path)
 
-        result = LocalFile(root_path, rel_path_out, sr, cksum=cksum, is_dir=is_dir)
+        result = LocalFile(path, rel_path_out, sr, cksum=cksum, is_dir=is_dir)
         return result
 
     @classmethod
@@ -197,7 +195,7 @@ class LocalFile(JSONSerDes):
 
         sr_dummy = SRDummy(**sr_d)
 
-        result = LocalFile(obj["root_path"], obj["rel_path"], sr_dummy,
+        result = LocalFile(obj["path"], obj["rel_path"], sr_dummy,
                            obj["cksum"], obj["cksum_type"], is_dir=obj["is_dir"])
         result.collected = obj["collected"]
 
@@ -215,7 +213,7 @@ class LocalFile(JSONSerDes):
             allkeys = set(a.keys()) | set(b.keys())
 
             for k in allkeys:
-                if k in ["metadata", "atime_ns", "collected", "root_path", "path"]:
+                if k in ["metadata", "atime_ns", "collected", "path"]:
                     continue
                 if a.get(k, None) != b.get(k, None):
                     if k == '_json_classname':
