@@ -33,7 +33,30 @@ checks are then very simple:
 
 # Usage
 
-TODO.
+For basic usage, you can sync files with
+
+`baycat sync /path/to/data s3://bucket/path/to/backup/`
+
+You can manage manifests with the manifest subcommands:
+
+To create a manifest without syncing anything, you can use
+
+`baycat manifest create /path/to/data`
+
+Which you can then update with
+
+`baycat manifest update /path/to/data`
+
+Both of these commands take a `--pool-size` argument so you can
+compute the checksums in parallel as expected.  The `create` command
+will save the chosen pool size in the saved manifest, while the
+`update` command only uses the pool size for this specific instance.
+
+Or if you want to stash the manifest file somewhere else
+
+`baycat manifest create -o /tmp/sample_manifest /path/to/data`
+
+See `--help` for each subcommand for other options.
 
 # Random notes
 

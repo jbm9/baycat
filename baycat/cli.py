@@ -7,6 +7,7 @@ from traceback import print_exception
 
 import click
 
+from .manifest import Manifest
 from .cli_impl import CLIImpl
 
 import boto3
@@ -43,7 +44,7 @@ def cli(log_level):
 @click.option('--maybe-spend-money', is_flag=True,
               help="Don't enable the moto mock of S3")
 def sync(src, dst, verbose, dry_run, quiet, maybe_spend_money):
-    '''Run a sync command from src to dst, with the given options
+    '''Sync from src to dst, with the given options
 
     This returns 0 to the shell on success, 1 if there were errors
     during transfers, and 2 for unhandled exceptions.
@@ -82,6 +83,44 @@ def sync(src, dst, verbose, dry_run, quiet, maybe_spend_money):
         if verbose:
             print_exception(e)
         sys.exit(2)
+
+@cli.group()
+def manifest():
+    '''Manage manifest files'''
+    pass
+
+@manifest.command()
+@click.argument('root_path') #, help='Directory to create the manifest for')
+@click.option('-o', '--output', default=None,
+              help='Path to save the manifest at (default is root_path/.baycat_manifest')
+@click.option('-c', '--pool-size', default=None,
+              help='Number of subprocesses to use when computing checksums')
+@click.option('--skip-checksums', is_flag=True)
+def create(root_path, output, pool_size, skip_checksums):
+    '''Create a new manifest for the given directory
+    '''
+    m = Manifest.for_path(root_path, path=output,
+                          poolsize=pool_size, do_checksum=not skip_checksums)
+    m.save()
+
+@manifest.command()
+@click.argument('root_path') #, help='Directory to create the manifest for')
+@click.option('-o', '--output', default=None,
+              help='Path to save the manifest at (default is root_path/.baycat_manifest')
+@click.option('-c', '--pool-size', default=None,
+              help='Number of subprocesses to use when computing checksums (does not persist)')
+@click.option('--force-checksums', is_flag=True)
+def update(root_path, output, pool_size, force_checksums):
+    '''Create a new manifest for the given directory
+    '''
+    m = Manifest.load(root_path, output)
+    old_poolsize = m.poolsize
+    if pool_size is not None:
+        m.poolsize = pool_size
+    m.update(force_checksums)
+    m.poolsize = old_poolsize
+
+    m.save(overwrite=True)
 
 
 if __name__ == '__main__':
