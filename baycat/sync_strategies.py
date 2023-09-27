@@ -272,11 +272,7 @@ class SyncLocalToS3(SyncStrategy):
 
         bucket = self.manifest_dst.bucket_name
 
-        try:
-            response = self.manifest_dst.upload_file(src_path, dst_path)
-        except ClientError as e:
-            logging.error(f'Upload of "{rel_p}" failed: {e}')
-            return
+        response = self.manifest_dst.upload_file(src_path, dst_path)
 
     def _transfer_metadata(self, rel_p):
         '''Copy metadata from src to dst for file at relative path rel_p
@@ -299,11 +295,7 @@ class SyncS3ToLocal(SyncLocalToLocal):
         fd, dst_temp = tempfile.mkstemp(prefix=dst_path, dir="/")
         os.close(fd)  # how delightfully retro feeling
 
-        try:
-            response = self.manifest_src.download_file(src_path, dst_temp)
-        except ClientError as e:
-            logging.error(f'Download of "{rel_p}" failed: {e}')
-            return
+        response = self.manifest_src.download_file(src_path, dst_temp)
 
         os.rename(dst_temp, dst_path)
 
