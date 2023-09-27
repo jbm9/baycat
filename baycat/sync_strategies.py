@@ -12,7 +12,7 @@ from botocore.exceptions import ClientError
 
 
 class SyncStrategy(ABC):
-    def __init__(self, manifest_src, manifest_dst, enable_delete=False, dry_run=False):
+    def __init__(self, manifest_src, manifest_dst, enable_delete=False, dry_run=False, verbose=False):
         self.manifest_src = manifest_src
         self.manifest_dst = manifest_dst
         self.manifest_xfer = manifest_dst.copy()
@@ -20,6 +20,7 @@ class SyncStrategy(ABC):
 
         self.enable_delete = enable_delete
         self.dry_run = dry_run
+        self.verbose = verbose
 
         if self.dry_run and self.enable_delete:
             self.enable_delete = False
@@ -52,7 +53,6 @@ class SyncStrategy(ABC):
             if not lf.is_dir:
                 continue
             self.mkdir(rel_p)
-            self.manifest_xfer.mark_transferred(rel_p, lf)
 
             # Add the dir to the list of "files" touched
             paths_touched.append(rel_p)
@@ -108,6 +108,9 @@ class SyncStrategy(ABC):
         if self.enable_delete:
             self._counters["rm"] += 1
             try:
+                if self.verbose:
+                    logging.info(f'Removing file {rel_p}')
+
                 self._rm_file(rel_p)
             except Execption as e:
                 logging.error(f'Error while deleting {rel_p}: {e}')
@@ -133,6 +136,9 @@ class SyncStrategy(ABC):
         if not src_lf.is_dir and not self.dry_run:
             self._counters["xfer"] += 1
             try:
+                if self.verbose:
+                    logging.info(f'Transfer file {rel_p}')
+
                 self._transfer_file(rel_p)
             except Exception as e:
                 logging.error(f'Error while transferring {rel_p}: {e}')
@@ -155,6 +161,9 @@ class SyncStrategy(ABC):
         if not self.dry_run:
             self._counters["xfer_metadata"] += 1
             try:
+                if self.verbose:
+                    logging.info(f'Transfer metadata {rel_p}')
+
                 self._transfer_metadata(rel_p)
             except Exception as e:
                 logging.error(f'Error while transferring metadata for {rel_p}: {e}')
@@ -176,6 +185,9 @@ class SyncStrategy(ABC):
         if not self.dry_run:
             self._counters["mkdir"] += 1
             try:
+                if self.verbose:
+                    logging.info(f'mkdir {rel_p}')
+
                 self._mkdir(rel_p)
             except Exception as e:
                 logging.error(f'Error while mkdir for {rel_p}: {e}')

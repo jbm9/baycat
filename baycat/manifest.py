@@ -1,3 +1,4 @@
+from collections import defaultdict
 import logging
 import json
 from _md5 import md5
@@ -80,6 +81,7 @@ class Manifest(JSONSerDes):
         self.poolsize = poolsize
         self.entries = {}  # path => LocalFile
         self.selectors = []
+        self.counters = defaultdict(int)
 
         logging.debug(f'Manifest created {self} / {self.root} / {self.path}')
 
@@ -339,9 +341,11 @@ class Manifest(JSONSerDes):
             return
 
         self.entries[rel_path] = src_f.copy()
+        self.counters["bytes_up"] += src_f.size
 
     def mark_deleted(self, rel_path):
         del self.entries[rel_path]
+        self.counters["bytes_deleted"] += src_f.size
 
     def mark_mkdir(self, rel_p, src_f):
         self.mark_transferred(rel_p, src_f)
