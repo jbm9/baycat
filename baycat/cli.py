@@ -43,6 +43,14 @@ def cli(log_level):
 @click.option('--maybe-spend-money', is_flag=True,
               help="Don't enable the moto mock of S3")
 def sync(src, dst, verbose, dry_run, quiet, maybe_spend_money):
+    '''Run a sync command from src to dst, with the given options
+
+    This returns 0 to the shell on success, 1 if there were errors
+    during transfers, and 2 for unhandled exceptions.
+
+    Note that we currently very loosely define our error handling
+    during transfers, so it may be overly broad.
+    '''
     cli_impl.verbose = verbose
     cli_impl.dry_run = dry_run
 
@@ -65,10 +73,15 @@ def sync(src, dst, verbose, dry_run, quiet, maybe_spend_money):
         rho = total_size/bytes_up
         if not quiet:
             print(f'Uploaded {bytes_up} vs repo of {total_size},  speedup of {rho:0.3f}')
+
+        if ss.was_success():
+            sys.exit(0)
+        sys.exit(1)
     except Exception as e:
         print(f'Problem with run: {e}')
         if verbose:
             print_exception(e)
+        sys.exit(2)
 
 
 if __name__ == '__main__':
