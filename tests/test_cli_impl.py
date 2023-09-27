@@ -82,3 +82,40 @@ class TestCLIImpl(BaycatTestCase):
         self.assertRaises(ClientError, lambda:
                           self.cli_impl.sync(self.test_dir, s3_url))
 
+    def test_sync__efficiency(self):
+        '''Ensure that the sync process does what we expect
+
+        This is a quick check to verify that we aren't doing more work
+        than needed for our transfers.  It's mostly a hedge against
+        regressions.
+        '''
+
+        dst_bucket = "dst"
+        bucket = self._mk_bucket(dst_bucket)
+        s3_url = f"s3://{dst_bucket}/some/path"
+
+        tgt_dir = os.path.join(self.base_dir, "1")
+
+        sync1 = self.cli_impl.sync(self.test_dir, s3_url)
+        self.assertEqual(len(self.FILECONTENTS),
+                         sync1.manifest_dst.counters["s3_uploads"])
+
+        sync1_rep = self.cli_impl.sync(self.test_dir, s3_url)
+        self.assertEqual(0,
+                         sync1_rep.manifest_dst.counters["s3_uploads"])
+
+        sync2 = self.cli_impl.sync(s3_url, tgt_dir)
+        # Check that the sync was successful
+        self.assertEquivalentDirs(self.test_dir, tgt_dir)
+        self.assertEqual(1,
+                         sync2.manifest_src.counters["s3_list_objects"])
+        self.assertEqual(len(self.FILECONTENTS),
+                         sync2.manifest_src.counters["s3_downloads"])
+
+        sync3 = self.cli_impl.sync(s3_url, tgt_dir)
+        # Check that the sync was successful
+        self.assertEquivalentDirs(self.test_dir, tgt_dir)
+        self.assertEqual(1,
+                         sync3.manifest_src.counters["s3_list_objects"])
+        self.assertEqual(0,
+                         sync3.manifest_src.counters["s3_downloads"])

@@ -33,9 +33,11 @@ class S3Manifest(Manifest):
 
     def upload_file(self, src_path, dst_path):
         self.s3.upload_file(src_path, self.bucket_name, dst_path)
+        self.counters["s3_uploads"] += 1
 
     def download_file(self, src_path, dst_path):
         self.s3.download_file(self.bucket_name, src_path, dst_path)
+        self.counters["s3_downloads"] += 1
 
     def save(self, path=None, overwrite=True):
         if path is None:
@@ -45,7 +47,9 @@ class S3Manifest(Manifest):
             raise ValueError('Request to not overwrite a manifest in S3, but I am lazy.')
 
         fh = BytesIO(json.dumps(self, default=BaycatJSONEncoder().default).encode('utf8'))
+        self.counters["bytes_up"] += len(fh.getvalue())
         self.s3.upload_fileobj(fh, self.bucket_name, path)
+        self.counters["s3_uploads"] += 1
         logging.debug('Saved to s3://%s/%s' % (self.bucket_name, path))
 
     @classmethod
@@ -90,7 +94,7 @@ class S3Manifest(Manifest):
             self._add_entry(objsum)
 
         while response['IsTruncated']:
-            response = cls._fetch_objs(bucket_name, root, response['NextContinuationToken'])
+            response = self._fetch_objs(bucket_name, root, response['NextContinuationToken'])
             for objsum in response['Contents']:
                 self._add_entry(objsum)
 
@@ -135,8 +139,7 @@ class S3Manifest(Manifest):
 
         self.entries[dpath] = s3f
 
-    @classmethod
-    def _fetch_objs(cls, bucket_name, root, token=None):
+    def _fetch_objs(self, bucket_name, root, token=None):
         kwargs = {}
         if token:
             kwargs["ContinuationToken"] = token
@@ -146,6 +149,7 @@ class S3Manifest(Manifest):
             response = s3.list_objects_v2(Bucket=bucket_name,
                                           Prefix=root,
                                           **kwargs)
+            self.counters["s3_list_objects"] += 1
             return response
         except ClientError as e:
             logging.error(f'Error fetching bucket contents: {e}')

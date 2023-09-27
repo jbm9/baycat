@@ -60,8 +60,8 @@ class CLIImpl:
 
         # Update the source manifest
         m_src.update()
-        if not self.dry_run:
-            m_src.save()
+        if not self.dry_run and not src_s3:
+            m_src.save(overwrite=True)
 
         sync_opts = {
             'dry_run': self.dry_run,
