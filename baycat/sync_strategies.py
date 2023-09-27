@@ -235,8 +235,8 @@ class SyncStrategy(ABC):
         is completed.
         '''
         logging.debug('%s.transfer_file(%s)' % (str(type(self).__name__), rel_p))
-        dst_path = self.manifest_dst._expand_path(rel_p)
-        src_path = self.manifest_src._expand_path(rel_p)
+        dst_path = self.manifest_dst.expand_path(rel_p)
+        src_path = self.manifest_src.expand_path(rel_p)
 
         src_lf = self.manifest_src.entries[rel_p]
         if not src_lf.is_dir and not self.dry_run:
@@ -291,8 +291,8 @@ class SyncStrategy(ABC):
         is completed.
         '''
         logging.debug('%s.transfer_metadata (%s)' % (type(self).__name__, rel_p))
-        dst_path = self.manifest_dst._expand_path(rel_p)
-        src_path = self.manifest_src._expand_path(rel_p)
+        dst_path = self.manifest_dst.expand_path(rel_p)
+        src_path = self.manifest_src.expand_path(rel_p)
 
         if not self.dry_run:
             self._counters["xfer_metadata"] += 1
@@ -347,7 +347,7 @@ class SyncStrategy(ABC):
         is completed.
         '''
         logging.debug('%s.mkdir (%s)' % (type(self).__name__, rel_p))
-        dst_path = self.manifest_dst._expand_path(rel_p)
+        dst_path = self.manifest_dst.expand_path(rel_p)
 
         if not self.dry_run:
             self._counters["mkdir"] += 1
@@ -379,23 +379,26 @@ class SyncStrategy(ABC):
 class SyncLocalToLocal(SyncStrategy):
     def _rm_file(self, rel_p):
         '''rel_p the relative path to the file to delete from dst, if allowed'''
-        dst_path = self.manifest_dst._expand_path(rel_p)
+        dst_path = self.manifest_dst.expand_path(rel_p)
 
         logging.debug(f'rm_file({dst_path})')
-        # XXX TODO need to do rmdir on directories
-        os.unlink(dst_path)
+
+        if self.manifest_dst.entries[rel_p].is_dir:
+            os.rmdir(dst_path)
+        else:
+            os.unlink(dst_path)
 
     def _mkdir(self, rel_p):
         '''Create an empty directory'''
-        dst_path = self.manifest_dst._expand_path(rel_p)
+        dst_path = self.manifest_dst.expand_path(rel_p)
         os.makedirs(dst_path, exist_ok=True)
 
     def _transfer_file(self, rel_p):
         '''Copy file from the src to the dst'''
-        dst_path = self.manifest_dst._expand_path(rel_p)
-        src_path = self.manifest_src._expand_path(rel_p)
+        dst_path = self.manifest_dst.expand_path(rel_p)
+        src_path = self.manifest_src.expand_path(rel_p)
 
-        logging.debug(f'cp {src_path} {dst_path}')
+        logging.debug(f'transfer {src_path} to {dst_path}')
 
         # Make a temporary path, which we own
         fd, dst_temp = tempfile.mkstemp(prefix=dst_path, dir="/")
@@ -407,8 +410,8 @@ class SyncLocalToLocal(SyncStrategy):
 
     def _transfer_metadata(self, rel_p):
         '''Copy metadata from src to dst for file at relative path rel_p'''
-        dst_path = self.manifest_dst._expand_path(rel_p)
-        src_path = self.manifest_src._expand_path(rel_p)
+        dst_path = self.manifest_dst.expand_path(rel_p)
+        src_path = self.manifest_src.expand_path(rel_p)
 
         logging.debug(f'metadata copy {src_path} {dst_path}')
 
@@ -424,7 +427,7 @@ class SyncLocalToLocal(SyncStrategy):
 class SyncLocalToS3(SyncStrategy):
     def _rm_file(self, rel_p):
         '''rel_p the relative path to the file to delete from dst, if allowed'''
-        dst_path = self.manifest_dst._expand_path(rel_p)
+        dst_path = self.manifest_dst.expand_path(rel_p)
 
         logging.debug(f'rm_file({dst_path})')
         logging.warn(f'Delete from S3 is not yet supported')
@@ -439,8 +442,8 @@ class SyncLocalToS3(SyncStrategy):
 
     def _transfer_file(self, rel_p):
         '''Copy file from the src to the dst'''
-        dst_path = self.manifest_dst._expand_path(rel_p)
-        src_path = self.manifest_src._expand_path(rel_p)
+        dst_path = self.manifest_dst.expand_path(rel_p)
+        src_path = self.manifest_src.expand_path(rel_p)
 
         src_lf = self.manifest_src.entries[rel_p]
 
@@ -460,8 +463,8 @@ class SyncLocalToS3(SyncStrategy):
 class SyncS3ToLocal(SyncLocalToLocal):
     def _transfer_file(self, rel_p):
         '''Copy file from the src to the dst'''
-        dst_path = self.manifest_dst._expand_path(rel_p)
-        src_path = self.manifest_src._expand_path(rel_p)
+        dst_path = self.manifest_dst.expand_path(rel_p)
+        src_path = self.manifest_src.expand_path(rel_p)
 
         # Make a temporary path, which we own
         fd, dst_temp = tempfile.mkstemp(prefix=dst_path, dir="/")
@@ -473,8 +476,8 @@ class SyncS3ToLocal(SyncLocalToLocal):
 
     def _transfer_metadata(self, rel_p):
         '''Copy metadata from src to dst for file at relative path rel_p'''
-        dst_path = self.manifest_dst._expand_path(rel_p)
-        src_path = self.manifest_src._expand_path(rel_p)
+        dst_path = self.manifest_dst.expand_path(rel_p)
+        src_path = self.manifest_src.expand_path(rel_p)
 
         logging.debug(f'metadata copy {src_path} {dst_path}')
 

@@ -166,7 +166,7 @@ class Manifest(JSONSerDes):
 
         return result
 
-    def _expand_path(self, rel_path):
+    def expand_path(self, rel_path):
         return os.path.join(self.root, rel_path)
 
     def save(self, path=None, overwrite=False):

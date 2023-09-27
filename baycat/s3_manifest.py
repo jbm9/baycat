@@ -28,7 +28,7 @@ class S3Manifest(Manifest):
 
         self.s3 = boto3.client("s3")
 
-    def _expand_path(self, rel_path):
+    def expand_path(self, rel_path):
         return os.path.join(self.root_path, rel_path)
 
     def upload_file(self, src_path, dst_path):
