@@ -12,7 +12,31 @@ from botocore.exceptions import ClientError
 
 
 class SyncStrategy(ABC):
+    '''Base class for all synchronization strategies
+
+    If you want to add a new pair of (source type, destination type)
+    manifests for transfers, you'll need to subclass this and
+    implement the "filesystem operation" abstract methods.  The Local
+    and S3 examples are reasonably concise examples to work from.
+    '''
     def __init__(self, manifest_src, manifest_dst, enable_delete=False, dry_run=False, verbose=False):
+        '''Set up for synchronization
+
+        * manifest_src: the Manifest-y thing to source files from
+        * manifest_dst: the Manifest-y thing to send files to
+        * enable_delete: allow the sync process to delete things from
+                         the destination
+        * dry_run: do a "dry run" (print what would happen, but make
+                   no changes)
+        * verbose: print out synchronization actions as they happen
+
+        The src and dst manifests can be anything that acts
+        sufficiently like a Manifest.  We don't have a good API for
+        that yet, so you'll need to poke around a bit.  Apologies, but
+        I don't think the current architecture is fully baked enough
+        yet, so it's not worth documenting the specifics ahead of
+        time.
+        '''
         self.manifest_src = manifest_src
         self.manifest_dst = manifest_dst
         self.manifest_xfer = manifest_dst.copy()
@@ -27,7 +51,50 @@ class SyncStrategy(ABC):
 
         self._counters = defaultdict(int)
 
+        self._dirty = False  # If we got any exceptions during the process
+
+    def was_success(self):
+        '''Call this after a run to check if any problems were experienced
+        '''
+        return not self._dirty
+
     def sync(self, dry_run=False):
+        '''Run the sync process
+
+        This is a complicated process, but has a reasonable number of
+        inline comments.  The gist of it is that we walk the current
+        state of the source manifest (so you need to update it before
+        calling this) and the current state of the destination
+        manifest (same caveat), compute the difference in state, and
+        then walk through making that happen.
+
+        If deletions are enabled, they happen before anything else.
+        This ordering is important, as we may be space-limited, and
+        need to free up that space on the remote side before creating
+        our new files.  Even if we don't have capacity problems on the
+        far side, it's a reasonably cheap operation to lead with.
+
+        The exact order in which new/updated files are transferred is
+        touchy on a local posix filesystem.  Specifically, we need to
+        ensure that all subdirectories exist before creating any
+        files.  To avoid complications here, we just create all the
+        subdirectories up front.  In the future, it may make sense to
+        do a topo sort and create directories as needed, but it's
+        reasonably cheap to do up front, and will probably smoke out
+        intermittent problems with the destination reasonably quickly.
+
+        Finally, at the end of the process, we have to go through and
+        touch up all the metadata for the directories, as their
+        timestamps are disturbed when we create files within them.
+
+        The timestamp of the root directory will be affected by this
+        process (unless you move the .baycat_manifest file elsewhere).
+        We do not "sweep away" that specific case of mtime
+        disturbance, as doing so would be unintentionally covering up
+        the fact that baycat has run in the first place.  We want to
+        be honest about the fact that we have changed the directory's
+        contents.
+        '''
         self.diff_state = self.manifest_src.diff_from(self.manifest_dst)
 
         # Maintaining consistent directory metadata is a real pain.
@@ -103,7 +170,25 @@ class SyncStrategy(ABC):
         return self.manifest_xfer
 
     def rm_file(self, rel_p):
-        '''rel_p the relative path to the file to delete from dst, if allowed'''
+        '''Delete a file (respects dry_run and enable_delete)
+
+        rel_p the relative path to the file to delete from dst, if allowed
+
+        This method actively checks the enable_delete flag and dry_run
+        flag, only calling the actual implementation of the deletion
+        method (`_rm_file(rel_p)`) if determines it is allowed to do
+        so.
+
+        All errors are consumed within this function, though it only
+        calls `mark_deleted()` on the final manifest if the deletion
+        is successful.  This ensures that the final manifest does not
+        show that the file was deleted, and the deletion can be
+        attempted again in the next run.
+
+        In case of an error, this method sets the `_dirty` flag on our
+        object, which can be used via `was_success()` after the sync
+        is completed.
+        '''
         logging.debug('%s.rm_file(%s)' % (type(self).__name__, rel_p))
         if self.enable_delete:
             self._counters["rm"] += 1
@@ -114,6 +199,7 @@ class SyncStrategy(ABC):
                 self._rm_file(rel_p)
             except Execption as e:
                 logging.error(f'Error while deleting {rel_p}: {e}')
+                self._dirty = True
                 return
         else:
             self._counters["delete_skipped"] += 1
@@ -125,9 +211,30 @@ class SyncStrategy(ABC):
 
     @abstractmethod
     def _rm_file(self, rel_p):
-        '''rel_p the relative path to the file to delete from dst, if allowed'''
+        '''Actually delete a file
+
+        rel_p the relative path to the file to delete from dst, if allowed
+
+        If anything fails, this must raise a reasonable exception
+        '''
 
     def transfer_file(self, rel_p):
+        '''Transfer a file from source to dst
+
+        This method actively checks the dry_run flag, only calling the
+        actual implementation of the deletion method
+        (`_rm_file(rel_p)`) if determines it is allowed to do so.
+
+        All errors are consumed within this function, though it only
+        calls `mark_transferred()` on the final manifest if the
+        deletion is successful.  This ensures that the final manifest
+        does not show that the file was uploaded, and the transfer can
+        be attempted again in the next run.
+
+        In case of an error, this method sets the `_dirty` flag on our
+        object, which can be used via `was_success()` after the sync
+        is completed.
+        '''
         logging.debug('%s.transfer_file(%s)' % (str(type(self).__name__), rel_p))
         dst_path = self.manifest_dst._expand_path(rel_p)
         src_path = self.manifest_src._expand_path(rel_p)
@@ -143,6 +250,7 @@ class SyncStrategy(ABC):
             except Exception as e:
                 logging.error(f'Error while transferring {rel_p}: {e}')
                 # Don't mark as transferred, because it wasn't.
+                self._dirty = True
                 return
         elif self.dry_run:
             logging.info(f"dry_run: transfer {src_path} -> {dst_path}")
@@ -151,9 +259,38 @@ class SyncStrategy(ABC):
 
     @abstractmethod
     def _transfer_file(self, rel_p):
-        '''Copy file from the src to the dst'''
+
+        '''Copy file from the src to the dst
+
+        rel_p the relative path to the file to transfer
+
+        If anything fails, this must raise a reasonable exception
+        '''
 
     def transfer_metadata(self, rel_p):
+        '''Transfer a path's metadata from source to dst
+
+        This is used to transfer the metadata to the destination
+        storage.  On local destinations, that includes setting all the
+        usual posix-y stuff (mtime, ctime, uid, gid, perms). On the S3
+        destination, it just updates the manifest, freeze drying the
+        local state in the manifest, ready to be pulled out at the
+        other end.
+
+        This method actively checks the dry_run flag, only calling the
+        actual implementation of the deletion method
+        (`_rm_file(rel_p)`) if determines it is allowed to do so.
+
+        All errors are consumed within this function, though it only
+        calls `mark_metadata_transferred()` on the final manifest if
+        the deletion is successful.  This ensures that the final
+        manifest does not show that the file was uploaded, and the
+        transfer can be attempted again in the next run.
+
+        In case of an error, this method sets the `_dirty` flag on our
+        object, which can be used via `was_success()` after the sync
+        is completed.
+        '''
         logging.debug('%s.transfer_metadata (%s)' % (type(self).__name__, rel_p))
         dst_path = self.manifest_dst._expand_path(rel_p)
         src_path = self.manifest_src._expand_path(rel_p)
@@ -167,6 +304,7 @@ class SyncStrategy(ABC):
                 self._transfer_metadata(rel_p)
             except Exception as e:
                 logging.error(f'Error while transferring metadata for {rel_p}: {e}')
+                self._dirty = True
                 return
         else:
             logging.info(f"dry_run: transfer metadata {src_path} -> {dst_path}")
@@ -176,9 +314,39 @@ class SyncStrategy(ABC):
 
     @abstractmethod
     def _transfer_metadata(self, rel_p):
-        '''Copy metadata from src to dst for file at relative path rel_p'''
+        '''Copy metadata from src to dst for file at relative path rel_p
+
+        rel_p the relative path whose metadata should be transferred
+
+        If anything fails, this must raise a reasonable exception
+        '''
 
     def mkdir(self, rel_p):
+        '''Create a new directory in the destination
+
+        This is used to create directories in the destination, in
+        order to receive files.  On S3 this is actually meaningless,
+        as files are stored under "keys" and not in a proper
+        filesystem.  On the posix side, it creates a lot of
+        directories with default permissions.  This is then corrected
+        in the final set of the sync, when we call
+        `transfer_metadata()` on all the directories which were
+        touched in the transfer.
+
+        This method actively checks the dry_run flag, only calling the
+        actual implementation of the deletion method
+        (`_rm_file(rel_p)`) if determines it is allowed to do so.
+
+        All errors are consumed within this function, though it only
+        calls `mark_metadata_transferred()` on the final manifest if
+        the deletion is successful.  This ensures that the final
+        manifest does not show that the file was uploaded, and the
+        transfer can be attempted again in the next run.
+
+        In case of an error, this method sets the `_dirty` flag on our
+        object, which can be used via `was_success()` after the sync
+        is completed.
+        '''
         logging.debug('%s.mkdir (%s)' % (type(self).__name__, rel_p))
         dst_path = self.manifest_dst._expand_path(rel_p)
 
@@ -191,6 +359,7 @@ class SyncStrategy(ABC):
                 self._mkdir(rel_p)
             except Exception as e:
                 logging.error(f'Error while mkdir for {rel_p}: {e}')
+                self._dirty = True
                 return
         else:
             logging.info(f"dry_run: make directory (recursive) {dst_path}")
@@ -200,7 +369,12 @@ class SyncStrategy(ABC):
 
     @abstractmethod
     def _mkdir(self, rel_p):
-        '''Create the directory give by rel_p, recursively'''
+        '''Create the directory give by rel_p, recursively
+
+        rel_p the relative path to the directory to make
+
+        If anything fails, this must raise a reasonable exception
+        '''
 
 
 class SyncLocalToLocal(SyncStrategy):
@@ -209,6 +383,7 @@ class SyncLocalToLocal(SyncStrategy):
         dst_path = self.manifest_dst._expand_path(rel_p)
 
         logging.debug(f'rm_file({dst_path})')
+        # XXX TODO need to do rmdir on directories
         os.unlink(dst_path)
 
     def _mkdir(self, rel_p):
