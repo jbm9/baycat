@@ -345,7 +345,6 @@ class Manifest(JSONSerDes):
 
     def mark_deleted(self, rel_path):
         del self.entries[rel_path]
-        self.counters["bytes_deleted"] += src_f.size
 
     def mark_mkdir(self, rel_p, src_f):
         self.mark_transferred(rel_p, src_f)

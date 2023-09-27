@@ -1,3 +1,4 @@
+from collections import defaultdict
 from io import BytesIO
 import json
 import logging
@@ -21,6 +22,7 @@ class S3Manifest(Manifest):
         self.root = root
         self.entries = {}  # path => S3File
         self.path = path
+        self.counters = defaultdict(int)
 
         self.root_path = os.path.join(bucket_name, root)
 
