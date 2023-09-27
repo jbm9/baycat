@@ -39,7 +39,11 @@ class SyncStrategy(ABC):
         '''
         self.manifest_src = manifest_src
         self.manifest_dst = manifest_dst
+
+        # Create a version of the destination we can twiddle as we go
+        # through the transfer, then save at the end of the process.
         self.manifest_xfer = manifest_dst.copy()
+
         logging.debug(f'Sync: "{manifest_src.root}" -> "{manifest_dst.root}"')
 
         self.enable_delete = enable_delete
@@ -47,6 +51,7 @@ class SyncStrategy(ABC):
         self.verbose = verbose
 
         if self.dry_run and self.enable_delete:
+            logging.warning(f'Delete was enabled in a dry run; disabling it.')
             self.enable_delete = False
 
         self._counters = defaultdict(int)
@@ -146,11 +151,7 @@ class SyncStrategy(ABC):
             self.transfer_metadata(rel_p)
             paths_touched.append(rel_p)
 
-        # Now we compute the order in which to fix up metadata for
-        # directories.  First, we add the root if needed.
-        if paths_touched:
-            paths_touched.append(".")
-
+        # Recursively add parent directories to the fixup queue
         for rel_p in paths_touched:
             p_cur = rel_p
             while p_cur and p_cur != "/":
@@ -159,10 +160,8 @@ class SyncStrategy(ABC):
                 if p_cur and p_cur != "/":
                     dir_fixups.add((-n_comps, p_cur))
 
-        # TODO Place the manifest file in the destination
-
         # And finally play back all the metadata, in order of
-        # decreasing depth.
+        # decreasing depth.  Which is why we use the weird tuple.
         for _, d in sorted(list(dir_fixups)):
             if d not in self.diff_state["deleted"]:
                 self.transfer_metadata(d)
@@ -444,8 +443,6 @@ class SyncLocalToS3(SyncStrategy):
         src_path = self.manifest_src._expand_path(rel_p)
 
         src_lf = self.manifest_src.entries[rel_p]
-
-        bucket = self.manifest_dst.bucket_name
 
         response = self.manifest_dst.upload_file(src_path, dst_path)
 
