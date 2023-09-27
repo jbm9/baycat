@@ -45,6 +45,15 @@ class CLIImpl:
         if src_s3 and dst_s3:
             raise ValueError(f"S3-to-S3 not supported")
 
+        if not dst_s3:
+            # destination is local, need to ensure it exists
+            if not os.path.isdir(path_dst):
+                if os.path.exists(path_dst):
+                    raise FileNotFoundError(f'Destination {path_dst} exists, but is not a dir, so cannot sync')
+                if self.dry_run:
+                    raise FileNotFoundError(f'Destination {path_dst} does not exist, so cannot create a manifest')
+                os.makedirs(path_dst)
+
         # Load our manifests from the wire
         m_src = self._load_manifest(path_src)
         m_dst = self._load_manifest(path_dst)

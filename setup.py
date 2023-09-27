@@ -43,5 +43,5 @@ setup(
             "pycodestyle",
         ],
     },
-    python_requres=">=3.7",
+    python_requres=">=3.10",
 )

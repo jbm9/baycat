@@ -3,6 +3,7 @@
 import logging
 import os
 import sys
+from traceback import print_exception
 
 import click
 
@@ -57,12 +58,17 @@ def sync(src, dst, verbose, dry_run, quiet, maybe_spend_money):
         # XXX TODO Only make this change if they haven't explicitly set it
         logging.basicConfig(level="INFO")
 
-    ss = cli_impl.sync(src, dst)
-    total_size = sum([e.size for e in ss.manifest_xfer.entries.values()])
-    bytes_up = 1 + ss.manifest_xfer.counters["bytes_up"]
-    rho = total_size/bytes_up
-    if not quiet:
-        print(f'Uploaded {bytes_up} vs repo of {total_size},  speedup of {rho:0.3f}')
+    try:
+        ss = cli_impl.sync(src, dst)
+        total_size = sum([e.size for e in ss.manifest_xfer.entries.values()])
+        bytes_up = 1 + ss.manifest_xfer.counters["bytes_up"]
+        rho = total_size/bytes_up
+        if not quiet:
+            print(f'Uploaded {bytes_up} vs repo of {total_size},  speedup of {rho:0.3f}')
+    except Exception as e:
+        print(f'Problem with run: {e}')
+        if verbose:
+            print_exception(e)
 
 
 if __name__ == '__main__':
