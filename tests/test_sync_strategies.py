@@ -103,6 +103,7 @@ class TestSyncLocalToLocal(BaycatTestCase):
         m_after = Manifest.for_path(tgt_dir)
 
         got = m_orig.diff_from(m_after)
+
         for k, n_exp in expected_n.items():
             self.assertEqual(n_exp, len(got[k]),
                              f'{k}: {got[k]}')
@@ -172,6 +173,55 @@ class TestSyncLocalToLocal(BaycatTestCase):
 
         self.assertEqual(got["new_manifest"], m_orig)
         self.assertEqual(got["old_manifest"], m_restored)
+
+    def test_regressed_files__disallowed(self):
+        # Note that this is a bit inside-out: we create a copy of the
+        # test directory, then modify it.  But we then treat the
+        # original directory as the "new" state, and try to sync back
+        # to it.
+
+        tgt_dir = self._copy_test_dir_via_sll()
+        self.assertEquivalentDirs(self.test_dir, tgt_dir)
+
+        # And then change stuff
+        expected_n = self._mangle_target_dir(tgt_dir)
+        filename_twiddle = self._ith_name(1)
+        p_twiddle = self._ith_path(1, tgt_dir)
+        time.sleep(0.01)
+        with open(p_twiddle, "w+") as fh:
+            fh.write("Updated state, do not overwrite")
+
+        m_orig = Manifest.for_path(self.test_dir)
+        m_after = Manifest.for_path(tgt_dir)
+
+        sll = SyncLocalToLocal(m_orig, m_after, enable_delete=True)
+        sll.sync()
+        self._assert_counters(sll, rm=1, xfer=1, xfer_metadata=5)
+
+    def test_regressed_files__allowed(self):
+        # Note that this is a bit inside-out: we create a copy of the
+        # test directory, then modify it.  But we then treat the
+        # original directory as the "new" state, and try to sync back
+        # to it.
+
+        tgt_dir = self._copy_test_dir_via_sll()
+        self.assertEquivalentDirs(self.test_dir, tgt_dir)
+
+        # And then change stuff
+        expected_n = self._mangle_target_dir(tgt_dir)
+        filename_twiddle = self._ith_name(1)
+        p_twiddle = self._ith_path(1, tgt_dir)
+        time.sleep(0.01)
+        with open(p_twiddle, "w+") as fh:
+            fh.write("Updated state, do not overwrite")
+
+        m_orig = Manifest.for_path(self.test_dir)
+        m_after = Manifest.for_path(tgt_dir)
+
+        sll = SyncLocalToLocal(m_orig, m_after,
+                               enable_delete=True, overwrite_regressed=True)
+        sll.sync()
+        self._assert_counters(sll, rm=1, xfer=2, xfer_metadata=6)
 
     def test_dry_run__copy(self):
         # Make a destination directory, and capture its state

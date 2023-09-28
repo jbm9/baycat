@@ -19,7 +19,9 @@ class SyncStrategy(ABC):
     implement the "filesystem operation" abstract methods.  The Local
     and S3 examples are reasonably concise examples to work from.
     '''
-    def __init__(self, manifest_src, manifest_dst, enable_delete=False, dry_run=False, verbose=False):
+    def __init__(self, manifest_src, manifest_dst,
+                 enable_delete=False, dry_run=False, verbose=False,
+                 overwrite_regressed=False):
         '''Set up for synchronization
 
         * manifest_src: the Manifest-y thing to source files from
@@ -29,6 +31,8 @@ class SyncStrategy(ABC):
         * dry_run: do a "dry run" (print what would happen, but make
                    no changes)
         * verbose: print out synchronization actions as they happen
+        * overwrite_regressed: if True, allows overwriting files despite
+                            local changes
 
         The src and dst manifests can be anything that acts
         sufficiently like a Manifest.  We don't have a good API for
@@ -36,6 +40,7 @@ class SyncStrategy(ABC):
         I don't think the current architecture is fully baked enough
         yet, so it's not worth documenting the specifics ahead of
         time.
+
         '''
         self.manifest_src = manifest_src
         self.manifest_dst = manifest_dst
@@ -49,6 +54,7 @@ class SyncStrategy(ABC):
         self.enable_delete = enable_delete
         self.dry_run = dry_run
         self.verbose = verbose
+        self.overwrite_regressed = overwrite_regressed
 
         if self.dry_run and self.enable_delete:
             logging.warning(f'Delete was enabled in a dry run; disabling it.')
@@ -143,11 +149,18 @@ class SyncStrategy(ABC):
             paths_touched.append(rel_p)
 
         for rel_p in self.diff_state["contents"]:
+            if rel_p in self.diff_state["regressed"] and not self.overwrite_regressed:
+                logging.warning(f'Skipping locally updated file "{rel_p}"')
+                continue
             self.transfer_file(rel_p)
             self.transfer_metadata(rel_p)
             paths_touched.append(rel_p)
 
         for rel_p in self.diff_state["metadata"]:
+            if rel_p and rel_p in self.diff_state["regressed"] and not self.overwrite_regressed:
+                logging.warning(f'Skipping locally updated file "{rel_p}"')
+                continue
+
             self.transfer_metadata(rel_p)
             paths_touched.append(rel_p)
 
