@@ -130,6 +130,9 @@ class BaycatTestCase(unittest.TestCase):
             }
         return S3File.from_objsum(root_path, objsum)
 
+    def _ith_name(self, i):
+        return self.FILECONTENTS[i][0]
+
     def _ith_path(self, i, tgt_dir=None, fileset=None):
         # Get the full path to the i'th test file
 

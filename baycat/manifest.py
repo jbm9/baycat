@@ -65,8 +65,8 @@ class Manifest(JSONSerDes):
         * poolsize: the number of subprocesses to use when computing
           checksums.  Note that poolsize=1 is special-cased to not use
           subprocessing
-
         '''
+
         self.root = root
         if path is None and root is None:
             raise ValueError('No path or root given, please at least lie to me')
@@ -267,7 +267,6 @@ class Manifest(JSONSerDes):
 
         Note that this doesn't do any actual work, it just finds what
         work needs to be done at this particular point in time.
-
         '''
 
         files_added = []    # Files present now, but missing then
@@ -288,6 +287,9 @@ class Manifest(JSONSerDes):
 
         files_common = paths_self & paths_old
 
+        # Mark if the "old" version has an mtime newer than the "new" one
+        files_regressed = []
+
         for p in files_common:
             lf_new = self.entries[p]
             lf_old = old_manifest.entries[p]
@@ -297,6 +299,9 @@ class Manifest(JSONSerDes):
             if not file_delta["_dirty"]:
                 files_unchanged.append(p)
                 continue
+
+            if lf_old.mtime_ns > lf_new.mtime_ns:
+                files_regressed.append(p)
 
             contents_modified = False
             metadata_modified = False
@@ -329,6 +334,7 @@ class Manifest(JSONSerDes):
             "contents": files_content_changed,
             "metadata": files_metadata_changed,
             "unchanged": files_unchanged,
+            "regressed": files_regressed,
             "new_manifest": self,
             "old_manifest": old_manifest,
         }

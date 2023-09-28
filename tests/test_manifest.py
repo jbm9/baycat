@@ -150,15 +150,22 @@ class TestManifest(BaycatTestCase):
         self.assertTrue(len(m_orig_copy.selectors))
         self.assertEqual(m, m_orig_copy)
 
-        def _ith_path(i):
-            # Get the full path to the i'th test file
-            return os.path.join(self.test_dir, self.FILECONTENTS[i][0])
-
         time.sleep(0.01)  # a tiny blip to force diffs in timestamps
-        delete_path = _ith_path(0)
-        rewrite_path = _ith_path(1)
-        new_path = _ith_path(0) + "-but-new"
-        chmod_path = _ith_path(2)
+
+        delete_path = self._ith_path(0)
+        delete_name = self._ith_name(0)[2:]
+
+        rewrite_path = self._ith_path(1)
+        rewrite_name = self._ith_name(1)[2:]
+
+        new_path = self._ith_path(0) + "-but-new"
+        new_name = self._ith_name(0)[2:] + "-but-new"
+
+        chmod_path = self._ith_path(2)
+        chmod_name = self._ith_name(2)[2:]
+
+        regress_path = self._ith_path(3)
+        regress_name = self._ith_name(3)[2:]
 
         os.unlink(delete_path)
 
@@ -170,22 +177,37 @@ class TestManifest(BaycatTestCase):
 
         os.chmod(chmod_path, 0o0600)
 
-        m2 = Manifest(path=mpath+"2")
-        m2.add_selector(ps)
+        ut = m.entries[regress_name].get_utime()
+        with open(regress_path, "w+") as f:
+            f.write("your grandma was here")
+        dt = 86400
+        utp = (ut[0]-dt, ut[1]-dt)
+        os.utime(regress_path, ns=utp)
 
-        got = m.diff_from(m2)
+        # Now build a new manifest
+        m_new = Manifest(path=mpath+"2")
+        ps = PathSelector(os.path.join(self.test_dir, "a"))
 
-        self.assertEqual(1, len(got["added"]))
-        self.assertEqual(1, len(got["deleted"]))
-        self.assertEqual(1, len(got["contents"]))
-        self.assertEqual(2, len(got["metadata"]))
+        m_new.add_selector(ps)
 
-        self.assertEqual(got["new_manifest"], m)
-        self.assertEqual(got["old_manifest"], m2)
+        got = m_new.diff_from(m)
 
-        self.assertNotEqual(m_orig_copy, m2)
+        self.assertEqual([delete_name], got["deleted"])
+        self.assertEqual([new_name], got["added"])
+        self.assertEqual(set([rewrite_name, regress_name]),
+                         set(got["contents"]))
+        self.assertEqual(set(['', chmod_name]),
+                         set(got["metadata"]))
+        self.assertEqual(set([regress_name]),
+                         set(got["regressed"]))
+
+        self.assertEqual(got["new_manifest"], m_new)
+        self.assertEqual(got["old_manifest"], m)
+
+        # And let's test update() while we're here
+        self.assertNotEqual(m_orig_copy, m_new)
         m_orig_copy.update()
-        self.assertEqual(m_orig_copy, m2)
+        self.assertEqual(m_orig_copy, m_new)
 
     def test_add_selector__twice_is_noop(self):
         ps = PathSelector(os.path.join(self.test_dir, "a"))
