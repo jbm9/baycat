@@ -15,8 +15,18 @@ from baycat.s3_manifest import S3Manifest, ClientError, S3MANIFEST_FILENAME
 
 
 class TestS3Manifest(BaycatTestCase):
-    def test_from_bucket(self):
+    def test_from_bucket__happypath(self):
         m = S3Manifest.from_bucket(self.BUCKET_NAME, self.S3_PATH)
+        self.assertEqual(len(m.entries), len(self.FILECONTENTS))
+
+        for relpath, contents, md5sum in self.FILECONTENTS:
+            s3f = m.entries[relpath]
+            self.assertEqual(str(md5sum), s3f.cksum)
+
+        # And check out from_uri while we're at it.
+        m.save()  # Get our manifest up there
+        s3_uri = f's3://{self.BUCKET_NAME}/{self.S3_PATH}'
+        m = S3Manifest.from_uri(s3_uri)
         self.assertEqual(len(m.entries), len(self.FILECONTENTS))
 
         for relpath, contents, md5sum in self.FILECONTENTS:
@@ -31,27 +41,28 @@ class TestS3Manifest(BaycatTestCase):
 
     def test_from_bucket__nobucket(self):
         self.assertRaises(ClientError,
-                          lambda: S3Manifest.from_bucket("yourmom", "/"))
+                          lambda: S3Manifest.from_bucket("yourmom"))
+
+        self.assertRaises(ClientError,
+                          lambda: S3Manifest.from_uri("s3://yourmom"))
 
     def test_from_bucket__empty(self):
         empty_bucket = "empty"
         self._mk_bucket(empty_bucket)
 
-        m = S3Manifest.from_bucket(empty_bucket, "/")
+        m = S3Manifest.from_bucket(empty_bucket)
         self.assertEqual(len(m.entries), 0)
 
-    def skip_test_from_bucket__lotsafiles(self):
+    def test_from_bucket__lotsafiles(self):
         '''This test is intended to test the continuation code.
-
-        Unfortunately, it doesn't seem like moto ever sends these.
         '''
         nonempty_bucket = "somanyfiles"
 
-        N = 1000
+        N = 1001
 
-        self._build_s3(nonempty_bucket, [[f'/{i}', f'{i}', ""] for i in range(N)])
+        self._build_s3(nonempty_bucket, [[f'{i}', f'{i}', ""] for i in range(N)])
 
-        m = S3Manifest.from_bucket(nonempty_bucket, "/")
+        m = S3Manifest.from_bucket(nonempty_bucket)
         self.assertEqual(len(m.entries), N)
 
     def test_load__exceptions(self):
@@ -76,3 +87,9 @@ class TestS3Manifest(BaycatTestCase):
 
         s3f = m.entries[self.FILECONTENTS[0][0]]
         self.assertRaises(ValueError, lambda: S3Manifest.from_json_obj(s3f.to_json_obj()))
+
+    def test_expand_path(self):
+        m = S3Manifest('_', self.BUCKET_NAME, '/root/path/foo')
+
+        self.assertEqual(m.expand_path('/another/path'),
+                         'root/path/foo/another/path')

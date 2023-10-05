@@ -1,6 +1,5 @@
 import logging
 import os
-from urllib.parse import urlparse
 
 from .manifest import Manifest, MANIFEST_FILENAME
 from .s3_manifest import S3Manifest, S3MANIFEST_FILENAME, ClientError
@@ -25,16 +24,8 @@ class CLIImpl:
                 logging.debug("Didn't find manifest for %s, creating a new one" % (path,))
                 m = Manifest.for_path(path)
         else:
-            p = urlparse(path)
-            bucket_name = p.netloc
-            try:
-                m = S3Manifest.load(bucket_name, p.path)
-            except ClientError as error:
-                if error.response['Error']['Code'] == '404':
-                    logging.debug("Didn't find an S3 manfiest for %s, creating a new one" % (path,))
-                    m = S3Manifest(bucket_name=bucket_name, root=p.path)
-                else:
-                    raise error
+            m = S3Manifest.from_uri(path)
+            # Don't handle any errors here.
         return m
 
     def sync(self, path_src, path_dst):

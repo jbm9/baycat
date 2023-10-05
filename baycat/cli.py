@@ -92,13 +92,15 @@ def sync(src, dst, verbose, dry_run, quiet, maybe_spend_money, print_counters):
             print_exception(e)
         sys.exit(2)
 
+
 @cli.group()
 def manifest():
     '''Manage manifest files'''
     pass
 
+
 @manifest.command()
-@click.argument('root_path') #, help='Directory to create the manifest for')
+@click.argument('root_path')
 @click.option('-m', '--manifest', default=None,
               help='Path to save the manifest at (default is root_path/.baycat_manifest')
 @click.option('-c', '--pool-size', default=None,
@@ -111,8 +113,9 @@ def create(root_path, manifest, pool_size, skip_checksums):
                           poolsize=pool_size, do_checksum=not skip_checksums)
     m.save()
 
+
 @manifest.command()
-@click.argument('root_path') #, help='Directory to create the manifest for')
+@click.argument('root_path')
 @click.option('-m', '--manifest', default=None,
               help='Path to save the manifest at (default is root_path/.baycat_manifest')
 @click.option('-c', '--pool-size', default=None, type=int,
@@ -130,6 +133,7 @@ def update(root_path, manifest, pool_size, force_checksums):
 
     m.save(overwrite=True)
 
+
 @manifest.command()
 @click.argument('root_path')
 @click.option('-m', '--manifest',
@@ -142,7 +146,7 @@ def estimate_cost(root_path, manifest, storage_price):
     for e in m.entries.values():
         total_size += e.size if not e.is_dir else 0
 
-    cost_per_mo = total_size/(1<<30) * storage_price
+    cost_per_mo = total_size/(1 << 30) * storage_price
     print(f'Total size: {total_size} bytes, ${cost_per_mo:0.4f}/mo')
 
 

@@ -50,7 +50,7 @@ class BaycatTestCase(unittest.TestCase):
 
     # Name of our testing S3 bucket
     BUCKET_NAME = "mah_bukkit"
-    S3_PATH = "/oh/no/"
+    S3_PATH = "oh/no/"
 
     def _build_dirs(self, base_suffix, leaf_dirs, file_contents):
         dpath = os.path.join(self.base_dir, base_suffix)
@@ -82,6 +82,7 @@ class BaycatTestCase(unittest.TestCase):
 
         for subpath, content, _ in file_contents:
             dstpath = os.path.join(self.S3_PATH, subpath)
+            dstpath = dstpath.lstrip("/")  # fix to match S3 semantics
             fh = BytesIO(content.encode("UTF8"))
             bucket.upload_fileobj(fh, dstpath)
 

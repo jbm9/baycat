@@ -3,10 +3,12 @@ from io import BytesIO
 import json
 import logging
 import os
+from urllib.parse import urlparse
 
 from .s3_file import S3File
 from .json_serdes import JSONSerDes, baycat_json_decoder, BaycatJSONEncoder
 from .manifest import Manifest
+from .util import bc_path_join
 
 import boto3
 from botocore.exceptions import ClientError
@@ -24,12 +26,17 @@ class S3Manifest(Manifest):
         self.path = path
         self.counters = defaultdict(int)
 
-        self.root_path = os.path.join(bucket_name, root)
-
         self.s3 = boto3.client("s3")
 
     def expand_path(self, rel_path):
-        return os.path.join(self.root_path, rel_path)
+        '''Expand a relative path to a bucket-relative abspath
+
+        Note that we do not include the bucket name in the path, and
+        we elide the "root" `/` from the URL.  (If we don't skip the
+        slash, S3 creates a directory with no name, visible in the web
+        UI).
+        '''
+        return bc_path_join(self.root, rel_path).lstrip("/")
 
     def upload_file(self, src_path, dst_path):
         self.s3.upload_file(src_path, self.bucket_name, dst_path)
@@ -41,7 +48,7 @@ class S3Manifest(Manifest):
 
     def save(self, path=None, overwrite=True):
         if path is None:
-            path = os.path.join(self.root_path, self.path)
+            path = bc_path_join(self.root, self.path)
 
         if not overwrite:
             raise ValueError('Request to not overwrite a manifest in S3, but I am lazy.')
@@ -54,16 +61,8 @@ class S3Manifest(Manifest):
 
     @classmethod
     def load(cls, bucket_name, root):
-        if False:
-            uri = urlparse(path)
-            if uri is None or uri.scheme != "s3":
-                raise ValueError(f'Could parse "{path} as S3 URI.  Expected s3://bucket/root/path')
-            bucket_name = uri.netloc
-            root = uri.path
-
-        full_path = os.path.join(root, S3MANIFEST_FILENAME)
-
-        logging.debug('Load from s3://%s%s' % (bucket_name, full_path))
+        full_path = bc_path_join(root, S3MANIFEST_FILENAME)
+        logging.debug('Load from s3://%s/%s' % (bucket_name, full_path))
 
         fh = BytesIO()
         try:
@@ -94,7 +93,9 @@ class S3Manifest(Manifest):
             self._add_entry(objsum)
 
         while response['IsTruncated']:
-            response = self._fetch_objs(bucket_name, root, response['NextContinuationToken'])
+            response = self._fetch_objs(self.bucket_name,
+                                        self.root,
+                                        response['NextContinuationToken'])
             for objsum in response['Contents']:
                 self._add_entry(objsum)
 
@@ -128,7 +129,7 @@ class S3Manifest(Manifest):
         return result
 
     def _add_entry(self, objsum):
-        s3f = S3File.from_objsum(self.root_path, objsum)
+        s3f = S3File.from_objsum(self.root, objsum)
         dpath = s3f.rel_path
 
         filename = os.path.basename(dpath)
@@ -156,8 +157,23 @@ class S3Manifest(Manifest):
             raise e
 
     @classmethod
-    def from_bucket(cls, bucket_name, root="/"):
+    def from_bucket(cls, bucket_name, root=""):
         result = S3Manifest(bucket_name=bucket_name, root=root)
         result.update()
 
         return result
+
+    @classmethod
+    def from_uri(cls, uri):
+        p = urlparse(uri)
+        bucket_name = p.netloc
+        path = p.path.lstrip("/")
+        try:
+            m = cls.load(bucket_name, path)
+        except ClientError as error:
+            if error.response['Error']['Code'] == '404':
+                logging.debug("Didn't find an S3 manfiest for %s, creating a new one" % (path,))
+                m = cls(bucket_name=bucket_name, root=path)
+            else:
+                raise error
+        return m

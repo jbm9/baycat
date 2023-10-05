@@ -8,6 +8,7 @@ from context import baycat, BaycatTestCase
 
 from baycat.cli_impl import CLIImpl
 from baycat.manifest import Manifest
+from baycat.util import bc_path_join
 
 
 class TestCLIImpl(BaycatTestCase):
@@ -26,19 +27,19 @@ class TestCLIImpl(BaycatTestCase):
         self.assertFalse(self.cli_impl.path_is_s3(""))
 
     def test_sync__local_to_local(self):
-        tgt_dir = os.path.join(self.base_dir, "1")
+        tgt_dir = bc_path_join(self.base_dir, "1")
         os.makedirs(tgt_dir, exist_ok=True)
         self.cli_impl.sync(self.test_dir, tgt_dir)
         self.assertEquivalentDirs(self.test_dir, tgt_dir)
 
     def test_sync__local_to_local__target_dne(self):
-        tgt_dir = os.path.join(self.base_dir, "1")
+        tgt_dir = bc_path_join(self.base_dir, "1")
         self.cli_impl.sync(self.test_dir, tgt_dir)
         self.assertEquivalentDirs(self.test_dir, tgt_dir)
 
     def test_sync__local_to_local__target_file(self):
         m = self._get_test_manifest()
-        tgt_dir = os.path.join(self.base_dir, "1")
+        tgt_dir = bc_path_join(self.base_dir, "1")
 
         with open(tgt_dir, "w") as f:
             f.write("whomp whomp")
@@ -47,7 +48,7 @@ class TestCLIImpl(BaycatTestCase):
                           self.cli_impl.sync(self.test_dir, tgt_dir))
 
     def test_sync__local_to_local__target_dne_dryrun(self):
-        tgt_dir = os.path.join(self.base_dir, "1")
+        tgt_dir = bc_path_join(self.base_dir, "1")
 
         self.cli_impl.dry_run = True
         self.assertRaises(FileNotFoundError, lambda:
@@ -58,14 +59,13 @@ class TestCLIImpl(BaycatTestCase):
         bucket = self._mk_bucket(dst_bucket)
         s3_url = f"s3://{dst_bucket}/some/path"
 
-        tgt_dir = os.path.join(self.base_dir, "1")
+        tgt_dir = bc_path_join(self.base_dir, "1")
 
-        self.cli_impl.sync(self.test_dir, s3_url)
-        self.cli_impl.sync(s3_url, tgt_dir)
-
+        m_upload = self.cli_impl.sync(self.test_dir, s3_url).manifest_xfer
+        m_download = self.cli_impl.sync(s3_url, tgt_dir).manifest_xfer
         self.assertEquivalentDirs(self.test_dir, tgt_dir)
 
-        tgt_dir2 = os.path.join(self.base_dir, "2")
+        tgt_dir2 = bc_path_join(self.base_dir, "2")
         self.cli_impl.sync(s3_url, tgt_dir2)
         self.assertEquivalentDirs(self.test_dir, tgt_dir2)
         self.assertEquivalentDirs(tgt_dir, tgt_dir2)
@@ -77,7 +77,7 @@ class TestCLIImpl(BaycatTestCase):
         dst_bucket = "dst_does_not_exist"
         s3_url = f"s3://{dst_bucket}/some/path"
 
-        tgt_dir = os.path.join(self.base_dir, "1")
+        tgt_dir = bc_path_join(self.base_dir, "1")
 
         self.assertRaises(ClientError, lambda:
                           self.cli_impl.sync(self.test_dir, s3_url))
@@ -94,7 +94,7 @@ class TestCLIImpl(BaycatTestCase):
         bucket = self._mk_bucket(dst_bucket)
         s3_url = f"s3://{dst_bucket}/some/path"
 
-        tgt_dir = os.path.join(self.base_dir, "1")
+        tgt_dir = bc_path_join(self.base_dir, "1")
 
         sync1 = self.cli_impl.sync(self.test_dir, s3_url)
         self.assertEqual(len(self.FILECONTENTS),
