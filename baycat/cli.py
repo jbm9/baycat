@@ -130,6 +130,21 @@ def update(root_path, output, pool_size, force_checksums):
 
     m.save(overwrite=True)
 
+@manifest.command()
+@click.argument('root_path')
+@click.option('-m', '--manifest',
+              help='Path to load the manifest from (default is root_path/.baycat_manifest')
+@click.option('--storage-price', type=float, default=0.023,
+              help='Price per gigabyte per month (ignores discounts)')
+def estimate_cost(root_path, manifest, storage_price):
+    m = Manifest.load(root_path, manifest)
+    total_size = 0
+    for e in m.entries.values():
+        total_size += e.size if not e.is_dir else 0
+
+    cost_per_mo = total_size/(1<<30) * storage_price
+    print(f'Total size: {total_size} bytes, ${cost_per_mo:0.4f}/mo')
+
 
 if __name__ == '__main__':
     cli()

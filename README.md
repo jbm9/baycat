@@ -56,6 +56,16 @@ Or if you want to stash the manifest file somewhere else
 
 `baycat manifest create -o /tmp/sample_manifest /path/to/data`
 
+To get a (very rough) estimate for the monthly storage cost for a
+given manifest, do
+
+`baycat manifest estimate-cost /path/to/data`
+
+There is an option to change the price per GB per month.  Note that
+none of this costing uses the volume discounts from Amazon.  Nor does
+the estimate include versioning history, if you have that enabled on
+your bucket.
+
 See `--help` for each subcommand for other options.
 
 # Random notes
