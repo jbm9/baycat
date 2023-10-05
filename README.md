@@ -54,7 +54,7 @@ will save the chosen pool size in the saved manifest, while the
 
 Or if you want to stash the manifest file somewhere else
 
-`baycat manifest create -o /tmp/sample_manifest /path/to/data`
+`baycat manifest create -m /tmp/sample_manifest /path/to/data`
 
 To get a (very rough) estimate for the monthly storage cost for a
 given manifest, do

@@ -99,29 +99,29 @@ def manifest():
 
 @manifest.command()
 @click.argument('root_path') #, help='Directory to create the manifest for')
-@click.option('-o', '--output', default=None,
+@click.option('-m', '--manifest', default=None,
               help='Path to save the manifest at (default is root_path/.baycat_manifest')
 @click.option('-c', '--pool-size', default=None,
               help='Number of subprocesses to use when computing checksums')
 @click.option('--skip-checksums', is_flag=True)
-def create(root_path, output, pool_size, skip_checksums):
+def create(root_path, manifest, pool_size, skip_checksums):
     '''Create a new manifest for the given directory
     '''
-    m = Manifest.for_path(root_path, path=output,
+    m = Manifest.for_path(root_path, path=manifest,
                           poolsize=pool_size, do_checksum=not skip_checksums)
     m.save()
 
 @manifest.command()
 @click.argument('root_path') #, help='Directory to create the manifest for')
-@click.option('-o', '--output', default=None,
+@click.option('-m', '--manifest', default=None,
               help='Path to save the manifest at (default is root_path/.baycat_manifest')
-@click.option('-c', '--pool-size', default=None,
+@click.option('-c', '--pool-size', default=None, type=int,
               help='Number of subprocesses to use when computing checksums (does not persist)')
 @click.option('--force-checksums', is_flag=True)
-def update(root_path, output, pool_size, force_checksums):
+def update(root_path, manifest, pool_size, force_checksums):
     '''Create a new manifest for the given directory
     '''
-    m = Manifest.load(root_path, output)
+    m = Manifest.load(root_path, manifest)
     old_poolsize = m.poolsize
     if pool_size is not None:
         m.poolsize = pool_size
