@@ -11,7 +11,6 @@ from .manifest import Manifest
 from .cli_impl import CLIImpl
 
 import boto3
-from moto import mock_s3
 
 cli_impl = CLIImpl()
 
@@ -58,6 +57,7 @@ def sync(src, dst, verbose, dry_run, quiet, maybe_spend_money, print_counters):
     cli_impl.dry_run = dry_run
 
     if not maybe_spend_money:
+        from moto import mock_s3
         mock_s3().start()
         s3 = boto3.resource("s3")
         bucket_name = "foo"
