@@ -24,7 +24,7 @@ class TestFileSelectors(BaycatTestCase):
 
         got_paths = []
 
-        ps = PathSelector(self.test_dir)
+        ps = self._get_ps()
 
         for lf in ps.walk():
             got_paths.append(lf.path)
@@ -32,9 +32,9 @@ class TestFileSelectors(BaycatTestCase):
         self.assertEqual(sorted(got_paths), sorted(expected_paths))
 
     def test_eq(self):
-        ps = PathSelector(self.test_dir)
-        ps2 = PathSelector(self.test_dir)
-        ps3 = PathSelector("/etc/")
+        ps = self._get_ps()
+        ps2 = self._get_ps()
+        ps3 = self._get_ps("/bin/")
 
         self.assertEqual(ps, ps)
         self.assertEqual(ps, ps2)
@@ -44,7 +44,7 @@ class TestFileSelectors(BaycatTestCase):
         self.assertNotEqual(ps3, ps)
 
     def test_json_round_trip(self):
-        ps = PathSelector(self.test_dir)
+        ps = self._get_ps()
 
         ps2 = ps.copy()
 
