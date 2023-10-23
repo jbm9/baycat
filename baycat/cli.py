@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import logging
 import os
 import sys
@@ -140,15 +141,38 @@ def update(root_path, manifest, pool_size, force_checksums):
               help='Path to load the manifest from (default is root_path/.baycat_manifest')
 @click.option('--storage-price', type=float, default=0.023,
               help='Price per gigabyte per month (ignores discounts)')
-def estimate_cost(root_path, manifest, storage_price):
+@click.option('--transaction-cost', type=float, default=0.005,
+              help='Price per 1k requests (ignores discounts)')
+@click.option('--fraction-changed', type=float, default=0.05,
+             help='Fraction of the files which are changed each month')
+@click.option('--syncs-per-month', type=int, default=24*30,
+              help='Number of syncs per month')
+@click.option('--download-cost', type=float, default=0.09,
+              help='Cost per gigabyte downloaded (ignores discounts)')
+def estimate_cost(root_path, manifest, storage_price,
+                  transaction_cost, fraction_changed,
+                  syncs_per_month, download_cost):
     m = Manifest.load(root_path, manifest)
     total_size = 0
     for e in m.entries.values():
         total_size += e.size if not e.is_dir else 0
 
+    cost_to_upload = len(m.entries)/1000 * transaction_cost
     cost_per_mo = total_size/(1 << 30) * storage_price
-    print(f'Total size: {total_size} bytes, ${cost_per_mo:0.4f}/mo')
+    uc = fraction_changed * cost_to_upload
 
+    s = json.dumps(m.to_json_obj())
+    bytes_per_manifest = len(s)
+    del(s)
+    print(bytes_per_manifest)
+
+    sync_dl_cost = bytes_per_manifest * syncs_per_month / (2<<30) * download_cost
+
+    print(f'Initial upload: ${cost_to_upload:0.4f}')
+    print(f'Total size: {total_size} bytes, storage cost of ${cost_per_mo:0.4f}/mo')
+    print(f'At {fraction_changed*100:0.1f}% changed/month, estimate update cost of ${uc:0.4f}')
+    print(f'Doing {syncs_per_month} syncs/mo, expect ${sync_dl_cost:0.4f}/mo in overhead')
+    print(f'Total (very rough) estimated monthly cost: ${uc+sync_dl_cost:0.4f}/mo')
 
 if __name__ == '__main__':
     cli()
