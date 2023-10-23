@@ -8,20 +8,71 @@ import time
 
 from context import baycat, BaycatTestCase
 
-from baycat.file_selectors import PathSelector
-from baycat.manifest import Manifest, DifferentRootPathException
+from baycat.manifest import Manifest, DifferentRootPathException, \
+    ManifestAlreadyExists, VacuousManifestError
 from baycat.local_file import LocalFile, ReservedNameException
 from baycat.json_serdes import BaycatJSONEncoder, baycat_json_decoder
 
 
 class TestManifest(BaycatTestCase):
+    def test_reserved_path(self):
+        m = Manifest(root="/tmp/foo")
+        self.assertEqual(m.reserved_prefix, ".baycat/")
+
+        m = Manifest(root="/tmp/foo", path="/tmp/foo/bar")
+        self.assertEqual(m.reserved_prefix, "bar/")
+
+        m = Manifest(root="/tmp/foo", path="/tmp/bar")
+        self.assertEqual(m.reserved_prefix, None)
+
+    def test_is_reserved_path(self):
+        m = self._get_test_manifest()
+        self.assertTrue(m.is_reserved_path(".baycat/manifest)"))
+        self.assertTrue(m.is_reserved_path(".baycat/randomcruft)"))
+        self.assertFalse(m.is_reserved_path(".baycat_foo"))
+
+        m = Manifest(root="/tmp/foo")
+        self.assertTrue(m.is_reserved_path(".baycat/manifest)"))
+        self.assertTrue(m.is_reserved_path(".baycat/randomcruft)"))
+        self.assertFalse(m.is_reserved_path(".baycat_foo"))
+
+        m = Manifest(root="/tmp/foo", path="/tmp/foo/bar")
+        self.assertTrue(m.is_reserved_path("bar/manifest)"))
+        self.assertTrue(m.is_reserved_path("bar/randomcruft)"))
+        self.assertTrue(m.is_reserved_path("bar/.baycat_foo"))
+        self.assertFalse(m.is_reserved_path(".baycat/manifest"))
+
+        m = Manifest(root="/tmp/foo", path="/tmp/bar")
+        self.assertFalse(m.is_reserved_path(".baycat/manifest)"))
+        self.assertFalse(m.is_reserved_path(".baycat/randomcruft)"))
+        self.assertFalse(m.is_reserved_path(".baycat_foo"))
+
+    def test_save_path(self):
+        m = Manifest.for_path(self.test_dir)
+        m.save()
+
+        expected_path = os.path.join(self.test_dir, ".baycat", "manifest")
+        self.assertTrue(os.path.exists(expected_path))
+        self.assertTrue(os.path.isfile(expected_path))
+
+    def test_default_manifest_path(self):
+        self.assertEqual(Manifest._default_manifest_path("/tmp/dummy"),
+                         "/tmp/dummy/.baycat/manifest")
+
+    def test_init__no_args(self):
+        self.assertRaises(ValueError, lambda: Manifest(path=None, root=None))
+
+    def test_update__no_selectors(self):
+        m = Manifest(root="/tmp/foobar")
+        self.assertRaises(VacuousManifestError, lambda: m.update())
+
+    def test_save__no_selectors(self):
+        m = Manifest(root="/tmp/foobar")
+        self.assertRaises(VacuousManifestError, lambda: m.save())
+
     def test_serdes__happy_path(self):
-        ps = PathSelector(self.test_dir)
-        m = Manifest(path="_")
-        m.add_selector(ps)
-
+        m = self._get_test_manifest()
         m_json = m.to_json_obj()
-
         m_round_trip = Manifest.from_json_obj(m_json)
 
         self.assertEqual(m, m_round_trip)
@@ -43,53 +94,55 @@ class TestManifest(BaycatTestCase):
         self.assertNotEqual(m, m_copy, m.diff_from(m_copy))
 
     def test_save_load__happy_path(self):
-        ps = PathSelector(os.path.join(self.test_dir, "a"))
-
-        mpath = os.path.join(self.test_dir, ".baycat_manifest")
-
-        m = Manifest(path=mpath)
-        m.add_selector(ps)
-
+        m = self._get_test_manifest()
         m.save()
         m_round_trip = Manifest.load(self.test_dir)
 
         self.assertEqual(m, m_round_trip)
 
     def test_save_load__overwrite(self):
-        filename = os.path.join(self.test_dir, "test_manifest")
+        target_dir = os.path.join(self.test_dir, "test_manifest")
+        os.makedirs(target_dir)
+
+        filename = os.path.join(self.test_dir, "test_manifest/.manifest")
         dummy_str = "Overwrite me"
         with open(filename, "w") as f:
             f.write(dummy_str)
 
         m = Manifest.for_path(self.test_dir)
 
-        self.assertRaises(ValueError, lambda: m.save(filename))
+        self.assertRaises(ManifestAlreadyExists,
+                          lambda: m.save(manifest_path=filename))
 
-        m.save(filename, overwrite=True)
+        # Even with overwrite, we're not going to delete a file to make our dir
+        self.assertRaises(ValueError,
+                          lambda: m.save(path=filename, overwrite=True))
+
+        m.save(manifest_path=filename, overwrite=True)
 
         m2 = Manifest.load(self.test_dir, filename)
         self.assertEqual(m, m2)
 
     def test_eq__bogons(self):
-        ps = PathSelector(os.path.join(self.test_dir, "a"))
+        target_path = os.path.join(self.test_dir, "a")
+        m = Manifest.for_path(target_path)
 
-        mpath = os.path.join(self.test_dir, ".baycat_manifest")
-
-        m = Manifest(path=mpath)
-        m.add_selector(ps)
-
-        m2 = Manifest(path="_")
+        m2 = Manifest(root=self.test_dir)
 
         self.assertNotEqual(m, 0)
         self.assertNotEqual(m, m2)
 
     def test_eq__happy_path(self):
-        ps = PathSelector(os.path.join(self.test_dir, "a"))
+        target_path = os.path.join(self.test_dir, "a")
+        ps = self._get_ps("a")
 
-        mpath = os.path.join(self.test_dir, ".baycat_manifest")
-
-        m = Manifest(path=mpath)
+        m = Manifest(root=target_path)
         m.add_selector(ps)
+
+        m2 = Manifest(root=target_path)
+        m2.add_selector(ps)
+
+        self.assertEqual(m, m2)
 
     def test_eq__mismatch_pathset(self):
         m = Manifest.for_path(self.test_dir)
@@ -113,19 +166,16 @@ class TestManifest(BaycatTestCase):
         self.assertNotEqual(m, m2)
 
     def test_diff_from__nochanges(self):
-        ps = PathSelector(os.path.join(self.test_dir, "a"))
-
-        mpath = os.path.join(self.test_dir, ".baycat_manifest")
-
-        m = Manifest(path=mpath)
-        m.add_selector(ps)
+        ps = self._get_ps("a")
+        m = Manifest.for_path(os.path.join(self.test_dir, "a"))
 
         m_copy = m.copy()
         self.assertEqual(m, m_copy)
         m_copy.update()
         self.assertEqual(m, m_copy)
 
-        m2 = Manifest(path=mpath+"2")
+        mpath = os.path.join(self.test_dir, "confirm_path")
+        m2 = Manifest(path=mpath)
         m2.add_selector(ps)
 
         got = m.diff_from(m2)
@@ -137,12 +187,8 @@ class TestManifest(BaycatTestCase):
         self.assertEqual(got["old_manifest"], m2)
 
     def test_diff_from__changes(self):
-        ps = PathSelector(os.path.join(self.test_dir, "a"))
-
-        mpath = os.path.join(self.test_dir, ".baycat_manifest")
-
-        m = Manifest(path=mpath)
-        m.add_selector(ps)
+        dpath = os.path.join(self.test_dir, "a")
+        m = Manifest.for_path(dpath)
         self.assertTrue(len(m.selectors))
 
         m_orig_copy = m.copy()
@@ -185,9 +231,9 @@ class TestManifest(BaycatTestCase):
         os.utime(regress_path, ns=utp)
 
         # Now build a new manifest
-        m_new = Manifest(path=mpath+"2")
-        ps = PathSelector(os.path.join(self.test_dir, "a"))
-
+        mpath = os.path.join(self.test_dir, "confirm_path")
+        m_new = Manifest(path=mpath)
+        ps = self._get_ps("a")
         m_new.add_selector(ps)
 
         got = m_new.diff_from(m)
@@ -210,7 +256,7 @@ class TestManifest(BaycatTestCase):
         self.assertEqual(m_orig_copy, m_new)
 
     def test_add_selector__twice_is_noop(self):
-        ps = PathSelector(os.path.join(self.test_dir, "a"))
+        ps = self._get_ps("a")
 
         mpath = os.path.join(self.test_dir, ".baycat_manifest")
 
@@ -229,21 +275,21 @@ class TestManifest(BaycatTestCase):
         self.assertEqual(m, m2)
 
     def test_add_selector__different_roots(self):
-        ps = PathSelector(os.path.join(self.test_dir, "a"))
+        ps = self._get_ps("a")
 
         mpath = os.path.join(self.test_dir, ".baycat_manifest")
 
         m = Manifest(path="_")
         m.add_selector(ps)
 
-        ps2 = PathSelector(os.path.join(self.test_dir, "a"))
+        ps2 = self._get_ps("a")
         m.add_selector(ps2)
 
-        ps3 = PathSelector(os.path.join(self.test_dir, "a", "b"))
+        ps3 = self._get_ps("a/b")
         self.assertRaises(DifferentRootPathException, lambda: m.add_selector(ps3))
 
     def test_add_selector__checksums(self):
-        ps = PathSelector(os.path.join(self.test_dir, ""))
+        ps = self._get_ps()
 
         mpath = os.path.join(self.test_dir, ".baycat_manifest")
         logging.basicConfig(level=logging.DEBUG)
@@ -260,7 +306,7 @@ class TestManifest(BaycatTestCase):
         self.assertTrue(bool(n_checked))
 
     def test_add_selector__no_checksums(self):
-        ps = PathSelector(os.path.join(self.test_dir, ""))
+        ps = self._get_ps()
 
         mpath = os.path.join(self.test_dir, ".baycat_manifest")
 

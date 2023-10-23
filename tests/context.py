@@ -114,6 +114,13 @@ class BaycatTestCase(unittest.TestCase):
         self.mock_s3.stop()
         shutil.rmtree(self.base_dir)
 
+    def _get_ps(self, subpath=None):
+        path = self.test_dir
+        if subpath is not None:
+            path = os.path.join(self.test_dir, subpath)
+        ps = PathSelector(path)
+        return ps
+
     def _get_lf(self, subpath=None, do_checksum=False):
         # Get a LocalFile for the given path, or the default if none given
         if subpath is None:

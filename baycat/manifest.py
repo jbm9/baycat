@@ -9,8 +9,9 @@ import time
 from .json_serdes import JSONSerDes, BaycatJSONEncoder, baycat_json_decoder
 from .file_selectors import PathSelector
 from .local_file import LocalFile, PATH_DUMMY_FILENAME
+from .util import bc_path_join, METADATA_DIRNAME
 
-MANIFEST_FILENAME = ".baycat_manifest"
+MANIFEST_FILENAME = "manifest"
 
 
 class DifferentRootPathException(ValueError):
@@ -20,6 +21,11 @@ class DifferentRootPathException(ValueError):
 
 class ManifestAlreadyExists(ValueError):
     '''Raised when a manifest file already exist'''
+    pass
+
+
+class VacuousManifestError(ValueError):
+    '''Raised when a manifest with no selectors is operated on'''
     pass
 
 
@@ -59,7 +65,7 @@ class Manifest(JSONSerDes):
     def __init__(self, path=None, root=None, poolsize=None):
         '''Create a new empty manifest
 
-        * path: path to the file to save the manifest in
+        * path: path to the .baycat directory to save the manifest in
         * root: path to the directory this manifest is for; None will
           be autopopulated in add_selector()
         * poolsize: the number of subprocesses to use when computing
@@ -71,12 +77,14 @@ class Manifest(JSONSerDes):
         if path is None and root is None:
             raise ValueError('No path or root given, please at least lie to me')
 
+        self.reserved_prefix = None
+
         if path is None:
-            path = os.path.join(self.root, MANIFEST_FILENAME)
+            path = Manifest._default_metadata_path(self.root)
 
+        if root and path.startswith(root):
+            self.reserved_prefix = path[len(root)+1:] + "/"
         self.path = path
-
-        self.abspath = os.path.abspath(path)
 
         self.poolsize = poolsize
         self.entries = {}  # path => LocalFile
@@ -84,6 +92,26 @@ class Manifest(JSONSerDes):
         self.counters = defaultdict(int)
 
         logging.debug(f'Manifest created {self} / {self.root} / {self.path}')
+
+    @classmethod
+    def _default_metadata_path(cls, root_path):
+        '''(internal) Get the default metadata path for a given directory
+        '''
+        return bc_path_join(root_path, METADATA_DIRNAME)
+
+    @classmethod
+    def _default_manifest_path(cls, root_path):
+        '''(internal) Get the default manifest path for a given directory
+        '''
+        return bc_path_join(cls._default_metadata_path(root_path), MANIFEST_FILENAME)
+
+    def is_reserved_path(self, rel_path):
+        '''(internal) Check if the given relative path is baycat metadata
+        '''
+        if not self.reserved_prefix:
+            return False
+
+        return rel_path.startswith(self.reserved_prefix)
 
     def add_selector(self, sel, do_checksum=False):
         '''Add from the file_selector interface selector given
@@ -112,18 +140,22 @@ class Manifest(JSONSerDes):
         if self.root is None:
             self.root = sel.rootpath
         elif self.root != sel.rootpath:
-            errstr = f"Manifest at {self.root}, path selector at {sel.rootpath}"
+            errstr = f"Manifest rooted at {self.root}, selector at {sel.rootpath}"
             raise DifferentRootPathException(errstr)
 
         self.selectors.append(sel)
         self.run_selectors(do_checksum)
 
     def run_selectors(self, do_checksum):
+        '''(internal) Run the file selectors and add the files
+
+        * do_checksum: if True, checksums are computed.
+        '''
         for sel in self.selectors:
             logging.debug('Manifest run selector %s' % (sel,))
             for lf in sel.walk():
-                if lf.path == self.abspath:
-                    logging.debug('Skipping manifest file: %s / %s' % (lf.path, self.abspath))
+                if self.is_reserved_path(lf.rel_path):
+                    logging.debug('Skipping reserved path: %s' % (lf.path,))
                     continue
                 logging.debug(f'Manifest {sel.__class__.__name__} add {lf.rel_path}')
                 self.entries[lf.rel_path] = lf
@@ -153,15 +185,14 @@ class Manifest(JSONSerDes):
                 self.entries[rel_p].cksum = cksum
 
     @classmethod
-    def for_path(cls, rootpath, path=None, do_checksum=False, poolsize=None):
+    def for_path(cls, root, do_checksum=False, poolsize=None):
         '''Generate an empty manifest, then populate it with a PathSelector
 
         See the constructor and add_selector() for the parameters for this function.
         '''
-        ps = PathSelector(rootpath)
-        if path is None:
-            path = os.path.join(rootpath, MANIFEST_FILENAME)
-        result = Manifest(path=path, root=rootpath, poolsize=poolsize)
+
+        result = Manifest(root=root, poolsize=poolsize)
+        ps = PathSelector(root)
         result.add_selector(ps, do_checksum=do_checksum)
 
         return result
@@ -169,30 +200,33 @@ class Manifest(JSONSerDes):
     def expand_path(self, rel_path):
         return os.path.join(self.root, rel_path)
 
-    def save(self, path=None, overwrite=False):
+    def save(self, path=None, manifest_path=None, overwrite=False):
         path = path or self.path
-        if path is None:
-            raise ValueError('Path must be set to save a manifest')
         if not self.selectors:
-            raise ValueError('Selectors are required to save a manifest')
-        logging.debug(f'{self} Saving manifest to {path}')
+            raise VacuousManifestError('Selectors are required to save a manifest')
 
-        if not overwrite and os.path.exists(path):
-            raise ManifestAlreadyExists(f"There is already a manifest at {path} and you didn't specify overwriting")
+        manifest_path = manifest_path or bc_path_join(path, MANIFEST_FILENAME)
+        logging.debug(f'{self} Saving manifest to {manifest_path}')
 
-        with open(path, "w+") as f:
+        if not overwrite and os.path.exists(manifest_path):
+            raise ManifestAlreadyExists(f"There is already a manifest at {manifest_path} and you didn't specify overwriting")
+
+        if os.path.exists(path) and not os.path.isdir(path):
+            raise ValueError(f'Target path exists, but is not a directory')
+
+        os.makedirs(path, exist_ok=True)
+
+        with open(manifest_path, "w+") as f:
             json.dump(self, f, default=BaycatJSONEncoder().default)
 
     @classmethod
     def load(cls, root, path=None):
         if path is None:
-            path = os.path.join(root, MANIFEST_FILENAME)
+            path = cls._default_manifest_path(root)
 
         with open(path, "r") as f:
             d = json.load(f)
             return cls.from_json_obj(d)
-
-        return result
 
     def __eq__(self, m_b):
         cands = [self.__class__, super(self.__class__, self)] + self.__class__.__subclasses__()
@@ -369,7 +403,7 @@ class Manifest(JSONSerDes):
         '''
         m_minimal = Manifest(root=self.root, poolsize=self.poolsize)
         if not self.selectors:
-            raise ValueError("update called without selectors")
+            raise VacuousManifestError("update called without selectors")
 
         for sel in self.selectors:
             m_minimal.add_selector(sel)
