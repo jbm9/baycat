@@ -5,11 +5,17 @@ Baycat is an efficiency-oriented S3 backup tool
 It is currently in heavy development, so only use it if you're looking
 for excitement and/or disappointment in your life.
 
+
 ## Motivation
 
 baycat is optimized for local IOPs and AWS cost.  It's intended to
 sync my homelab stack up to S3 for storage, but designed to allow
 future extensions to handle other mirror-style operations.
+
+baycat handles the basic Unix permissions and ownership, but does not
+handle anything else.  It is intended primarily for backing up large,
+unchanging datasets, such as a media collection or the photos from
+your phone.
 
 
 ## Sketch of Operation
@@ -24,7 +30,8 @@ checks are then very simple:
 * Walk local filesystem for anything which is different from the
   manifest file
 * Download the remote manifest
-* Optional: request bucket state from S3, to handle uploads which didn't update the manifest
+* Optional: request bucket state from S3, to handle uploads which
+  didn't update the manifest
 * Compare local and remote manifest
 * Compute a set of operations to synchronize the two
 * Execute those ops as we can
@@ -68,6 +75,7 @@ your bucket.
 
 See `--help` for each subcommand for other options.
 
+
 # Random notes
 
 ## Development setup
@@ -105,7 +113,6 @@ pycodestyle`.  Note that there are plenty of things it gets annoyed
 about in the existing codebase, so the current linting guidelines are
 "Please be tidy and consistent."  We may add proper linting to the
 repo in the glorious future.
-
 
 
 ## Rationalization of the metadata storage
