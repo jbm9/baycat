@@ -158,21 +158,22 @@ def estimate_cost(root_path, manifest, storage_price,
         total_size += e.size if not e.is_dir else 0
 
     cost_to_upload = len(m.entries)/1000 * transaction_cost
-    cost_per_mo = total_size/(1 << 30) * storage_price
-    uc = fraction_changed * cost_to_upload
+    storage_per_mo = total_size/(1 << 30) * storage_price
+    update_per_mo = fraction_changed * cost_to_upload
 
     s = json.dumps(m.to_json_obj())
     bytes_per_manifest = len(s)
     del(s)
-    print(bytes_per_manifest)
 
     sync_dl_cost = bytes_per_manifest * syncs_per_month / (2<<30) * download_cost
 
+    cost_per_mo = storage_per_mo + update_per_mo + sync_dl_cost
+
     print(f'Initial upload: ${cost_to_upload:0.4f}')
-    print(f'Total size: {total_size} bytes, storage cost of ${cost_per_mo:0.4f}/mo')
-    print(f'At {fraction_changed*100:0.1f}% changed/month, estimate update cost of ${uc:0.4f}')
+    print(f'Total size: {total_size} bytes, storage cost of ${storage_per_mo:0.4f}/mo')
+    print(f'At {fraction_changed*100:0.1f}% changed/month, estimate update cost of ${update_per_mo:0.4f}')
     print(f'Doing {syncs_per_month} syncs/mo, expect ${sync_dl_cost:0.4f}/mo in overhead')
-    print(f'Total (very rough) estimated monthly cost: ${uc+sync_dl_cost:0.4f}/mo')
+    print(f'Total (very rough) estimated monthly cost: ${cost_per_mo:0.4f}/mo')
 
 if __name__ == '__main__':
     cli()
