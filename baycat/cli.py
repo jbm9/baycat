@@ -169,11 +169,17 @@ def estimate_cost(root_path, manifest, storage_price,
 
     cost_per_mo = storage_per_mo + update_per_mo + sync_dl_cost
 
+    restore_dl_cost = total_size * download_cost/(1 << 30)
+    restore_x_cost = len(m.entries)/1000 * transaction_cost
+    restore_cost = restore_dl_cost + restore_x_cost
+
     print(f'Initial upload: ${cost_to_upload:0.4f}')
-    print(f'Total size: {total_size} bytes, storage cost of ${storage_per_mo:0.4f}/mo')
+    print(f'Total size: {total_size/1e9:0.2f} GB, storage cost of ${storage_per_mo:0.4f}/mo')
     print(f'At {fraction_changed*100:0.1f}% changed/month, estimate update cost of ${update_per_mo:0.4f}')
     print(f'Doing {syncs_per_month} syncs/mo, expect ${sync_dl_cost:0.4f}/mo in overhead')
     print(f'Total (very rough) estimated monthly cost: ${cost_per_mo:0.4f}/mo')
+    print()
+    print(f'Estimated cost to restore: ${restore_cost:0.4f}')
 
 
 if __name__ == '__main__':
