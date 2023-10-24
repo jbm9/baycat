@@ -10,12 +10,12 @@ from context import baycat, BaycatTestCase
 
 from baycat.manifest import Manifest, DifferentRootPathException, \
     ManifestAlreadyExists, VacuousManifestError
-from baycat.local_file import LocalFile, ReservedNameException
+from baycat.local_file import LocalFile
 from baycat.json_serdes import BaycatJSONEncoder, baycat_json_decoder
 
 
 class TestManifest(BaycatTestCase):
-    def test_reserved_path(self):
+    def test__reserved_prefix(self):
         m = Manifest(root="/tmp/foo")
         self.assertEqual(m.reserved_prefix, ".baycat/")
 
@@ -65,7 +65,7 @@ class TestManifest(BaycatTestCase):
         self.assertFalse(m.is_reserved_path(".baycat/randomcruft)"))
         self.assertFalse(m.is_reserved_path(".baycat_foo"))
 
-    def test_save_path(self):
+    def test_save__path_location(self):
         m = Manifest.for_path(self.test_dir)
         m.save()
 

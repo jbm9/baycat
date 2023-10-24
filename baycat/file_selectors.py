@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import os
 import logging
 
-from .local_file import LocalFile, ReservedNameException
+from .local_file import LocalFile
 from .json_serdes import JSONSerDes
 
 
@@ -39,11 +39,7 @@ class PathSelector(FileSelector, JSONSerDes):
         for root, dirs, files in os.walk(self.rootpath):
             for name in files:
                 path = os.path.join(root, name)
-                try:
-                    yield LocalFile.for_abspath(self.rootpath, path)
-                except ReservedNameException:
-                    logging.warning(f'Local file "{path}" conflicts with directory metadata file')
-                    pass
+                yield LocalFile.for_abspath(self.rootpath, path)
 
             for name in dirs:
                 path = os.path.join(root, name)

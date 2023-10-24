@@ -483,7 +483,7 @@ class SyncS3ToLocal(SyncLocalToLocal):
         fd, dst_temp = tempfile.mkstemp(prefix=dst_path, dir="/")
         os.close(fd)  # how delightfully retro feeling
 
-        response = self.manifest_src.download_file(src_path, dst_temp)
+        self.manifest_src.download_file(src_path, dst_temp)
 
         os.rename(dst_temp, dst_path)
 

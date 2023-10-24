@@ -7,7 +7,7 @@ import tempfile
 from context import baycat, BaycatTestCase
 
 from baycat.file_selectors import PathSelector
-from baycat.local_file import LocalFile, ReservedNameException
+from baycat.local_file import LocalFile
 from baycat.json_serdes import BaycatJSONEncoder, baycat_json_decoder
 
 
@@ -49,4 +49,3 @@ class TestFileSelectors(BaycatTestCase):
         ps2 = ps.copy()
 
         self.assertEqual(ps, ps2)
-

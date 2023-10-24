@@ -8,7 +8,7 @@ import unittest
 from context import baycat, BaycatTestCase
 
 from baycat.json_serdes import BaycatJSONEncoder, baycat_json_decoder
-from baycat.local_file import ChecksumKindException, PathMismatchException, ReservedNameException
+from baycat.local_file import ChecksumKindException, PathMismatchException
 from baycat.s3_file import S3File
 
 

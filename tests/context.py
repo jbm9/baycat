@@ -170,7 +170,7 @@ class BaycatTestCase(unittest.TestCase):
         self.assertFalse(bogus_metadatas)
 
     def _assert_counters(self, sll, **kwargs):
-        for k,v in kwargs.items():
+        for k, v in kwargs.items():
             msg = f'Mismatch for counter {k}: {sll._counters} / {kwargs}'
             self.assertEqual(v, sll._counters[k], msg)
 

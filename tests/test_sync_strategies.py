@@ -13,7 +13,7 @@ from context import baycat, BaycatTestCase
 
 from baycat.file_selectors import PathSelector
 from baycat.manifest import Manifest
-from baycat.local_file import LocalFile, ReservedNameException
+from baycat.local_file import LocalFile
 from baycat.json_serdes import BaycatJSONEncoder, baycat_json_decoder
 from baycat.s3_manifest import S3Manifest
 from baycat.sync_strategies import SyncLocalToLocal, SyncLocalToS3, SyncS3ToLocal

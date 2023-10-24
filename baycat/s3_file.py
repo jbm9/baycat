@@ -9,12 +9,8 @@ import time
 from _md5 import md5
 
 from .json_serdes import JSONSerDes
-
-from .local_file import LocalFile, ReservedNameException, ChecksumMissingException, \
-    ChecksumKindException, PathMismatchException, ReservedNameException
-
-
-PATH_DUMMY_FILENAME = ".baycat_dir_metadata"
+from .local_file import LocalFile, ChecksumMissingException, \
+    ChecksumKindException, PathMismatchException
 
 
 class S3File(LocalFile):

@@ -171,8 +171,8 @@ class Manifest(JSONSerDes):
         # we're just trying to get it working.
 
         if do_checksum:
-            f_ck_args = [ (k, self.expand_path(v.rel_path))
-                          for k, v in self.entries.items() if not v.is_dir]
+            f_ck_args = [(k, self.expand_path(v.rel_path))
+                         for k, v in self.entries.items() if not v.is_dir]
 
             logging.debug(f'Got {len(f_ck_args)} args')
             if self.poolsize == 1:
@@ -213,7 +213,7 @@ class Manifest(JSONSerDes):
         logging.debug(f'{self} Saving manifest to {manifest_path}')
 
         if not overwrite and os.path.exists(manifest_path):
-            raise ManifestAlreadyExists(f"There is already a manifest at {manifest_path} and you didn't specify overwriting")
+            raise ManifestAlreadyExists(f"{manifest_path} exists and overwrite not enabled")
 
         if os.path.exists(path) and not os.path.isdir(path):
             raise ValueError(f'Target path exists, but is not a directory')

@@ -12,11 +12,19 @@ from .json_serdes import JSONSerDes
 PATH_DUMMY_FILENAME = ".baycat_dir_metadata"
 
 
-class ReservedNameException(Exception): pass
-class TODOException(Exception): pass
-class ChecksumMissingException(ValueError): pass
-class ChecksumKindException(ValueError): pass
-class PathMismatchException(ValueError): pass
+class ChecksumMissingException(ValueError):
+    '''Checksum is missing'''
+    pass
+
+
+class ChecksumKindException(ValueError):
+    '''Checksums are not of same kind, so cannot be compared'''
+    pass
+
+
+class PathMismatchException(ValueError):
+    '''Attempted to compare two files which don't refer to the same rel_path'''
+    pass
 
 
 class LocalFile(JSONSerDes):

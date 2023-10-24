@@ -16,10 +16,3 @@ class TestJSONSerDes(BaycatTestCase):
         dummy = { "_json_classname": "Jason" }
 
         self.assertRaises(ValueError, lambda: baycat_json_decoder(dummy))
-
-    def TODO_test_baycatjsonencoder_passthrough(self):
-        obj = [1,2,3]
-
-        got = BaycatJSONEncoder().default(obj)
-        expected = [1,2,3]
-        self.assertEqual(expected, got)

@@ -144,7 +144,7 @@ def update(root_path, manifest, pool_size, force_checksums):
 @click.option('--transaction-cost', type=float, default=0.005,
               help='Price per 1k requests (ignores discounts)')
 @click.option('--fraction-changed', type=float, default=0.05,
-             help='Fraction of the files which are changed each month')
+              help='Fraction of the files which are changed each month')
 @click.option('--syncs-per-month', type=int, default=24*30,
               help='Number of syncs per month')
 @click.option('--download-cost', type=float, default=0.09,
@@ -163,9 +163,9 @@ def estimate_cost(root_path, manifest, storage_price,
 
     s = json.dumps(m.to_json_obj())
     bytes_per_manifest = len(s)
-    del(s)
+    del s
 
-    sync_dl_cost = bytes_per_manifest * syncs_per_month / (2<<30) * download_cost
+    sync_dl_cost = bytes_per_manifest * syncs_per_month / (2 << 30) * download_cost
 
     cost_per_mo = storage_per_mo + update_per_mo + sync_dl_cost
 
@@ -174,6 +174,7 @@ def estimate_cost(root_path, manifest, storage_price,
     print(f'At {fraction_changed*100:0.1f}% changed/month, estimate update cost of ${update_per_mo:0.4f}')
     print(f'Doing {syncs_per_month} syncs/mo, expect ${sync_dl_cost:0.4f}/mo in overhead')
     print(f'Total (very rough) estimated monthly cost: ${cost_per_mo:0.4f}/mo')
+
 
 if __name__ == '__main__':
     cli()

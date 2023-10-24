@@ -2,6 +2,7 @@ import os
 
 METADATA_DIRNAME = ".baycat"
 
+
 def bc_path_join(*args):
     '''Join paths; like os.path.join, but without magic
 
