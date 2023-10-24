@@ -40,7 +40,7 @@ class CLIImpl:
             # destination is local, need to ensure it exists
             if not os.path.isdir(path_dst):
                 if os.path.exists(path_dst):
-                    raise FileNotFoundError(f'Destination {path_dst} exists, but is not a dir, so cannot sync')
+                    raise FileExistsError(f'Destination {path_dst} exists, but is not a dir, so cannot sync')
                 if self.dry_run:
                     raise FileNotFoundError(f'Destination {path_dst} does not exist, so cannot create a manifest')
                 os.makedirs(path_dst)

@@ -44,7 +44,7 @@ class TestCLIImpl(BaycatTestCase):
         with open(tgt_dir, "w") as f:
             f.write("whomp whomp")
 
-        self.assertRaises(FileNotFoundError, lambda:
+        self.assertRaises(FileExistsError, lambda:
                           self.cli_impl.sync(self.test_dir, tgt_dir))
 
     def test_sync__local_to_local__target_dne_dryrun(self):
