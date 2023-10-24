@@ -103,7 +103,7 @@ def manifest():
 @manifest.command()
 @click.argument('root_path')
 @click.option('-m', '--manifest', default=None,
-              help='Path to save the manifest at (default is root_path/.baycat_manifest')
+              help='Path to save the manifest at (default is root_path/.baycat/manifest')
 @click.option('-c', '--pool-size', default=None,
               help='Number of subprocesses to use when computing checksums')
 @click.option('--skip-checksums', is_flag=True)
@@ -118,7 +118,7 @@ def create(root_path, manifest, pool_size, skip_checksums):
 @manifest.command()
 @click.argument('root_path')
 @click.option('-m', '--manifest', default=None,
-              help='Path to save the manifest at (default is root_path/.baycat_manifest')
+              help='Path to save the manifest at (default is root_path/.baycat/manifest')
 @click.option('-c', '--pool-size', default=None, type=int,
               help='Number of subprocesses to use when computing checksums (does not persist)')
 @click.option('--force-checksums', is_flag=True)
@@ -138,7 +138,7 @@ def update(root_path, manifest, pool_size, force_checksums):
 @manifest.command()
 @click.argument('root_path')
 @click.option('-m', '--manifest',
-              help='Path to load the manifest from (default is root_path/.baycat_manifest')
+              help='Path to load the manifest from (default is root_path/.baycat/manifest')
 @click.option('--storage-price', type=float, default=0.023,
               help='Price per gigabyte per month (ignores discounts)')
 @click.option('--transaction-cost', type=float, default=0.005,

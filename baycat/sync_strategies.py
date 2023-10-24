@@ -99,7 +99,7 @@ class SyncStrategy(ABC):
         timestamps are disturbed when we create files within them.
 
         The timestamp of the root directory will be affected by this
-        process (unless you move the .baycat_manifest file elsewhere).
+        process (unless you move the .baycat/ directory elsewhere).
         We do not "sweep away" that specific case of mtime
         disturbance, as doing so would be unintentionally covering up
         the fact that baycat has run in the first place.  We want to
