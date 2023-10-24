@@ -11,10 +11,22 @@ from moto import mock_s3
 
 from context import baycat, BaycatTestCase
 
-from baycat.s3_manifest import S3Manifest, ClientError, S3MANIFEST_FILENAME
+from baycat.s3_manifest import S3Manifest, ClientError
 
 
 class TestS3Manifest(BaycatTestCase):
+    def test__entries_keys(self):
+        '''Ensure that the rel_path keys are as expected'''
+        m = S3Manifest.from_bucket(self.BUCKET_NAME, self.S3_PATH)
+
+        keys_got = set(m.entries.keys())
+        keys_expected = set([a[0] for a in self.FILECONTENTS])
+
+        # Note that S3 doesn't have directories, so we only expect
+        # files here
+
+        self.assertEqual(keys_got, keys_expected)
+
     def test_from_bucket__happypath(self):
         m = S3Manifest.from_bucket(self.BUCKET_NAME, self.S3_PATH)
         self.assertEqual(len(m.entries), len(self.FILECONTENTS))

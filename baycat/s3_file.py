@@ -55,16 +55,12 @@ class S3File(LocalFile):
 
         is_dir = False
 
-        # Unwind our slightly janky directory placeholders
         key = obj_summary["Key"]
-        if False and os.path.basename(key) == S3MANIFEST_FILENAME:
-            is_dir = True
-            key = os.path.dirname(key)
 
-        rel_path = key[len(root_path):]  # XXX TODO make this less awful
+        rel_path = key[len(root_path):].lstrip("/")  # XXX TODO make this less awful
 
         st_size = obj_summary["Size"]
-        st_mtime_ns = 1e9 * obj_summary["LastModified"].timestamp()  # NB
+        st_mtime_ns = int(1e9 * obj_summary["LastModified"].timestamp())  # NB
         st_atime_ns = st_mtime_ns
         st_uid = None
         st_gid = None

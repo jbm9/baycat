@@ -13,13 +13,16 @@ from .util import bc_path_join
 import boto3
 from botocore.exceptions import ClientError
 
-S3MANIFEST_FILENAME = ".baycat_s3manifest"
+
+S3MANIFEST_DIR_KEY = ".baycat"
+S3MANIFEST_FILE_KEY = "s3manifest"
+S3MANIFEST_KEY = S3MANIFEST_DIR_KEY + "/" + S3MANIFEST_FILE_KEY
 
 
 class S3Manifest(Manifest):
     JSON_CLASSNAME = "S3Manifest"
 
-    def __init__(self, path=S3MANIFEST_FILENAME, bucket_name=None, root=None):
+    def __init__(self, path=S3MANIFEST_KEY, bucket_name=None, root=None):
         self.bucket_name = bucket_name
         self.root = root
         self.entries = {}  # path => S3File
@@ -61,7 +64,7 @@ class S3Manifest(Manifest):
 
     @classmethod
     def load(cls, bucket_name, root):
-        full_path = bc_path_join(root, S3MANIFEST_FILENAME)
+        full_path = bc_path_join(root, S3MANIFEST_KEY)
         logging.debug('Load from s3://%s/%s' % (bucket_name, full_path))
 
         fh = BytesIO()
@@ -131,13 +134,17 @@ class S3Manifest(Manifest):
     def _add_entry(self, objsum):
         s3f = S3File.from_objsum(self.root, objsum)
         dpath = s3f.rel_path
-
-        filename = os.path.basename(dpath)
-        filedir = os.path.dirname(dpath)
-        if filedir == self.root and filename == S3MANIFEST_FILENAME:
+        if dpath == S3MANIFEST_KEY or dpath == S3MANIFEST_DIR_KEY:
             logging.debug('Skipping _add_entry for "%s", as it looks like my manifest' % objsum["Key"])
             return
+        else:
+            logging.debug('Add "%s"' % objsum["Key"])
 
+        # If it already exists and is clean, don't update it.
+        if dpath in self.entries:
+            d_file = s3f.delta(self.entries[dpath])
+            if not d_file['_dirty']:
+                return
         self.entries[dpath] = s3f
 
     def _fetch_objs(self, bucket_name, root, token=None):

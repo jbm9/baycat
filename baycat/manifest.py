@@ -111,7 +111,11 @@ class Manifest(JSONSerDes):
         if not self.reserved_prefix:
             return False
 
-        return rel_path.startswith(self.reserved_prefix)
+        if rel_path.startswith(self.reserved_prefix):
+            return True
+        if rel_path == self.reserved_prefix.rstrip('/'):
+            return True
+        return False
 
     def add_selector(self, sel, do_checksum=False):
         '''Add from the file_selector interface selector given
@@ -155,7 +159,7 @@ class Manifest(JSONSerDes):
             logging.debug('Manifest run selector %s' % (sel,))
             for lf in sel.walk():
                 if self.is_reserved_path(lf.rel_path):
-                    logging.debug('Skipping reserved path: %s' % (lf.path,))
+                    logging.debug('Skipping reserved path: %s' % (lf.rel_path,))
                     continue
                 logging.debug(f'Manifest {sel.__class__.__name__} add {lf.rel_path}')
                 self.entries[lf.rel_path] = lf
@@ -167,7 +171,7 @@ class Manifest(JSONSerDes):
         # we're just trying to get it working.
 
         if do_checksum:
-            f_ck_args = [ (k, v.path)
+            f_ck_args = [ (k, self.expand_path(v.rel_path))
                           for k, v in self.entries.items() if not v.is_dir]
 
             logging.debug(f'Got {len(f_ck_args)} args')

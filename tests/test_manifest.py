@@ -25,6 +25,24 @@ class TestManifest(BaycatTestCase):
         m = Manifest(root="/tmp/foo", path="/tmp/bar")
         self.assertEqual(m.reserved_prefix, None)
 
+    def test__entries_keys(self):
+        m = self._get_test_manifest()
+
+        keys_got = set(m.entries.keys())
+        keys_expected = set([a[0] for a in self.FILECONTENTS])
+
+        keys_expected.add('')  # Add the root dir
+
+        for ld in self.LEAF_DIRS:   # And add the other directories
+            components = ld.split("/")
+            cur_path = ""
+            for dirname in components:
+                cur_path += dirname
+                keys_expected.add(cur_path)
+                cur_path += "/"
+
+        self.assertEqual(keys_got, keys_expected)
+
     def test_is_reserved_path(self):
         m = self._get_test_manifest()
         self.assertTrue(m.is_reserved_path(".baycat/manifest)"))

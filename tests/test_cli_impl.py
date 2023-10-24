@@ -2,6 +2,7 @@ import logging
 import os
 import unittest
 
+import boto3
 from botocore.exceptions import ClientError
 
 from context import baycat, BaycatTestCase
@@ -92,7 +93,8 @@ class TestCLIImpl(BaycatTestCase):
 
         dst_bucket = "dst"
         bucket = self._mk_bucket(dst_bucket)
-        s3_url = f"s3://{dst_bucket}/some/path"
+        dst_prefix = "some/path"
+        s3_url = f"s3://{dst_bucket}/{dst_prefix}"
 
         tgt_dir = bc_path_join(self.base_dir, "1")
 
@@ -104,8 +106,23 @@ class TestCLIImpl(BaycatTestCase):
         self.assertEqual(0,
                          sync1_rep.manifest_dst.counters["s3_uploads"])
 
+        # Ensure our manifest exists
+        s3 = boto3.client("s3")
+        entries = s3.list_objects_v2(Bucket=dst_bucket,
+                                     Prefix=dst_prefix)
+        expected_manifest_location = dst_prefix + "/.baycat/s3manifest"
+        got_manifest = False
+        for e in entries["Contents"]:
+            if e["Key"] == expected_manifest_location:
+                got_manifest = True
+
+        self.assertTrue(got_manifest, entries["Contents"])
+
+        m = self.cli_impl._load_manifest(s3_url)
+
         sync2 = self.cli_impl.sync(s3_url, tgt_dir)
         # Check that the sync was successful
+
         self.assertEquivalentDirs(self.test_dir, tgt_dir)
         self.assertEqual(1,
                          sync2.manifest_src.counters["s3_list_objects"])

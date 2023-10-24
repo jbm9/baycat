@@ -2,7 +2,7 @@ import logging
 import os
 
 from .manifest import Manifest, MANIFEST_FILENAME
-from .s3_manifest import S3Manifest, S3MANIFEST_FILENAME, ClientError
+from .s3_manifest import S3Manifest, ClientError
 from .sync_strategies import SyncLocalToLocal, SyncLocalToS3, SyncS3ToLocal
 
 

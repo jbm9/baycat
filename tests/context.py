@@ -159,13 +159,15 @@ class BaycatTestCase(unittest.TestCase):
 
         diffs = m1.diff_from(m2)
 
-        for k in ["added", "deleted", "contents"]:
+        for k in ["added", "deleted", "contents",]:
             self.assertEqual(0, len(diffs[k]),
-                             f'{k}: {diffs[k]}')
+                             f'"{k}": {diffs[k]}')
+        # Adding a .baycat subdirectory might disturb the root, which
+        # is expected.  We expect nothing but '' as possible diffs
+        # here.
+        bogus_metadatas = set(diffs["metadata"]) - {''}
 
-        # A baycat manifest in the local directory will disturb it.
-        # We will get zero sometimes, but occasionally one.
-        self.assertTrue(2 >= len(diffs["metadata"]))
+        self.assertFalse(bogus_metadatas)
 
     def _assert_counters(self, sll, **kwargs):
         for k,v in kwargs.items():

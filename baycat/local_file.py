@@ -98,6 +98,9 @@ class LocalFile(JSONSerDes):
         for f in self.metadata:
             if f == "atime_ns":
                 result[f] = False
+            elif f in ["uid", "gid", "mode"] and self.metadata[f] is None:
+                # If we don't know something, we can't diff it.
+                result[f] = False
             else:
                 result[f] = self.metadata[f] != old_state.metadata[f]
 

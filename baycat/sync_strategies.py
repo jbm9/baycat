@@ -496,8 +496,23 @@ class SyncS3ToLocal(SyncLocalToLocal):
 
         src_f = self.manifest_src.entries[rel_p]
         dst_f = self.manifest_xfer.entries[rel_p]
+        dst_f.path = dst_path  # Update absolute path for directories
 
-        os.chown(dst_path, src_f.metadata["uid"], src_f.metadata["gid"])
-        os.chmod(dst_path, src_f.metadata["mode"])
-        os.utime(dst_path, ns=src_f.get_utime())
+        uid = src_f.metadata["uid"]
+        if uid is None:
+            uid = os.getuid()
+
+        gid = src_f.metadata["gid"]
+        if gid is None:
+            gid = os.getgid()
+
+        mode = src_f.metadata["mode"]
+
+        os.chown(dst_path, int(uid), int(gid))
+        if mode is not None:
+            os.chmod(dst_path, mode)
+
+        ut = src_f.get_utime()
+        os.utime(dst_path, ns=ut)
+
         dst_f.mark_metadata_transferred(src_f)
